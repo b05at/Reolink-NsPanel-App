@@ -43,6 +43,10 @@ public class MotionService extends Service {
     private volatile ReolinkApi api;
     private Thread worker;
     private long lastMotionAt;
+    private boolean lastMd;
+    private long lastThumbAt;
+    private final java.util.concurrent.ExecutorService thumbExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
     private String shownStatus;
 
     private PowerManager pm;
@@ -101,6 +105,7 @@ public class MotionService extends Service {
     public void onDestroy() {
         running = false;
         if (worker != null) worker.interrupt();
+        thumbExecutor.shutdownNow();
         if (cpuLock != null && cpuLock.isHeld()) cpuLock.release();
         if (screenLock != null && screenLock.isHeld()) screenLock.release();
         if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
@@ -121,7 +126,9 @@ public class MotionService extends Service {
                     continue;
                 }
                 String trigger = Prefs.trigger(this);
-                if ("off".equals(trigger)) {
+                boolean wake = !"off".equals(trigger);
+                boolean thumbs = Prefs.thumbnails(this);
+                if (!wake && !thumbs) {
                     setStatus("Bewegungserkennung ausgeschaltet");
                     handle(false);
                     Thread.sleep(5000);
@@ -132,8 +139,13 @@ public class MotionService extends Service {
                     a = ReolinkApi.from(this);
                     api = a;
                 }
-                boolean motion = a.isMotion(trigger);
-                setStatus(motion ? "Bewegung erkannt" : "Aktiv – keine Bewegung");
+                boolean md = a.mdState();
+                if (md && !lastMd && thumbs) takeThumbnail(a);
+                lastMd = md;
+
+                boolean motion = wake && a.isMotion(trigger, md);
+                setStatus(!wake ? "Nur Vorschaubilder aktiv"
+                        : motion ? "Bewegung erkannt" : "Aktiv – keine Bewegung");
                 handle(motion);
                 Thread.sleep(Math.max(300, Prefs.pollMs(this)));
             } catch (InterruptedException e) {
@@ -141,6 +153,7 @@ public class MotionService extends Service {
             } catch (Exception e) {
                 setStatus("Kamera nicht erreichbar: " + e.getMessage());
                 handle(false);
+                lastMd = false;
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException ie) {
@@ -148,6 +161,23 @@ public class MotionService extends Service {
                 }
             }
         }
+    }
+
+    /** Beim Beginn einer Bewegung ein kleines Vorschaubild für die Aufnahmenliste sichern. */
+    private void takeThumbnail(final ReolinkApi a) {
+        final long now = System.currentTimeMillis();
+        if (now - lastThumbAt < 20000) return;
+        lastThumbAt = now;
+        thumbExecutor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    byte[] jpg = a.snap(ThumbStore.WIDTH, ThumbStore.HEIGHT);
+                    ThumbStore.get(MotionService.this).saveSnapshot(now, jpg);
+                } catch (Exception ignored) {
+                    // Vorschaubild ist optional
+                }
+            }
+        });
     }
 
     private void handle(boolean motion) {

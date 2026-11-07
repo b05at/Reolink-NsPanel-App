@@ -3,7 +3,7 @@
 Schlanke Android-App (ab Android 8.0) für die **Reolink E1 Outdoor Pro**, ohne Reolink-App und ohne Cloud.
 
 - **Livebild** per RTSP (SD-Substream als Standard, HD/4K umschaltbar), Ton optional
-- **Aufnahmen** von der SD-Karte nach Tag durchblättern und abspielen (mit Suchleiste)
+- **Aufnahmen** von der SD-Karte nach Tag durchblättern und abspielen (mit Suchleiste und Vorschaubildern)
 - **Bewegungserkennung**: Bei Bewegung (wahlweise nur Personen bzw. Personen + Fahrzeuge) schaltet sich das Display ein und das Livebild erscheint
 - **Schwenken/Neigen/Zoom** über ein einblendbares Steuerkreuz
 - **Sirene** der Kamera per Knopf auslösen (mit Sicherheitsabfrage, schaltet sich automatisch ab)
@@ -59,6 +59,10 @@ Beim ersten Start öffnen sich die Einstellungen:
 - **Sirene** (rechts oben): Nach Bestätigung ertönt die Sirene. Solange sie läuft, ist der Knopf gelb und dauerhaft sichtbar, ein Tippen schaltet sie sofort ab. Spätestens nach der eingestellten Zeit (Standard 30 s) oder beim Verlassen des Livebilds geht sie automatisch aus.
 - **Ganz/Füllen**: „Füllen“ schneidet das 16:9-Bild seitlich ab, sodass das quadratische Display voll ausgefüllt ist.
 - Die Aufnahmen werden vor dem Abspielen kurz geladen. Mit SD geht das schnell.
+
+## Vorschaubilder
+
+Die Reolink-API liefert keine Vorschaubilder zu Aufnahmen. Die App speichert deshalb zu Beginn jeder Bewegung ein kleines Kamerabild (320×180) und ordnet es der passenden Aufnahme zu. Aufnahmen, die bereits abgespielt wurden, bekommen ein Bild aus dem Video. Aufnahmen von vor der Installation bzw. aus Zeiten, in denen das Panel aus war, zeigen ein Platzhalter-Symbol. Die Bilder werden 3 Wochen aufbewahrt.
 
 ## Hinweise
 

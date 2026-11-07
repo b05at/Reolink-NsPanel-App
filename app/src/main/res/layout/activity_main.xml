@@ -41,46 +41,38 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:layout_margin="8dp"
+        android:layout_margin="14dp"
         android:background="@drawable/badge_motion"
-        android:paddingLeft="10dp"
-        android:paddingTop="4dp"
-        android:paddingRight="10dp"
-        android:paddingBottom="4dp"
-        android:text="BEWEGUNG"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.06"
+        android:paddingLeft="12dp"
+        android:paddingTop="5dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="5dp"
+        android:text="● BEWEGUNG"
         android:textColor="#000000"
         android:textSize="13sp"
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <!-- Rechte Seite: Schwenken und Sirene -->
-    <LinearLayout
+    <!-- Sirene: runder Knopf oben rechts -->
+    <FrameLayout
         android:id="@+id/sidePanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end|top"
-        android:layout_marginTop="6dp"
-        android:layout_marginRight="4dp"
-        android:orientation="vertical">
+        android:layout_margin="10dp">
 
-        <Button
-            android:id="@+id/btnPtz"
-            style="@style/BarButton"
-            android:layout_width="84dp"
-            android:layout_height="52dp"
-            android:text="Schwenken"
-            android:textSize="12sp" />
-
-        <Button
+        <ImageButton
             android:id="@+id/btnSiren"
-            style="@style/BarButton"
-            android:layout_width="84dp"
-            android:layout_height="52dp"
-            android:singleLine="false"
-            android:maxLines="2"
-            android:text="Sirene"
-            android:textStyle="bold" />
-    </LinearLayout>
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/fab_dark"
+            android:contentDescription="Sirene"
+            android:scaleType="center"
+            android:src="@drawable/ic_siren"
+            android:tint="@color/text" />
+    </FrameLayout>
 
     <!-- Einblendbares Steuerkreuz -->
     <LinearLayout
@@ -88,8 +80,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="start|bottom"
-        android:layout_marginLeft="8dp"
-        android:layout_marginBottom="66dp"
+        android:layout_marginLeft="10dp"
+        android:layout_marginBottom="76dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
@@ -102,83 +94,95 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginLeft="6dp"
-            android:orientation="vertical">
+            android:layout_marginLeft="8dp"
+            android:background="@drawable/bar_pill"
+            android:orientation="vertical"
+            android:padding="4dp">
 
-            <Button
+            <ImageButton
                 android:id="@+id/btnZoomIn"
-                style="@style/BarButton"
-                android:layout_width="52dp"
-                android:layout_height="46dp"
-                android:text="+"
-                android:textSize="22sp" />
+                style="@style/IconButton"
+                android:layout_marginTop="2dp"
+                android:layout_marginBottom="2dp"
+                android:contentDescription="Zoom +"
+                android:src="@drawable/ic_plus" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/btnZoomOut"
-                style="@style/BarButton"
-                android:layout_width="52dp"
-                android:layout_height="46dp"
-                android:text="−"
-                android:textSize="22sp" />
+                style="@style/IconButton"
+                android:layout_marginTop="2dp"
+                android:layout_marginBottom="2dp"
+                android:contentDescription="Zoom −"
+                android:src="@drawable/ic_minus" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/btnPtzClose"
-                style="@style/BarButton"
-                android:layout_width="52dp"
-                android:layout_height="46dp"
-                android:text="✕"
-                android:textSize="16sp" />
+                style="@style/IconButton"
+                android:layout_marginTop="2dp"
+                android:layout_marginBottom="2dp"
+                android:contentDescription="Schließen"
+                android:src="@drawable/ic_close" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Schwebende Bedienleiste -->
     <LinearLayout
         android:id="@+id/controls"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="@color/bar"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bar_pill"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="4dp">
+        android:paddingLeft="4dp"
+        android:paddingTop="4dp"
+        android:paddingRight="4dp"
+        android:paddingBottom="4dp">
 
-        <Button
+        <ImageButton
             android:id="@+id/btnRec"
-            style="@style/BarButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.6"
-            android:text="Aufnahmen" />
+            style="@style/IconButton"
+            android:contentDescription="Aufnahmen"
+            android:src="@drawable/ic_library" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnSound"
-            style="@style/BarButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.2"
-            android:text="Ton aus" />
+            style="@style/IconButton"
+            android:contentDescription="Ton"
+            android:src="@drawable/ic_volume_off" />
 
-        <Button
+        <TextView
             android:id="@+id/btnStream"
-            style="@style/BarButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="0.8"
-            android:text="SD" />
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginLeft="1dp"
+            android:layout_marginRight="1dp"
+            android:background="@drawable/icon_btn"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:text="SD"
+            android:textColor="@color/icon_tint"
+            android:textSize="15sp" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnZoom"
-            style="@style/BarButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.1"
-            android:text="Ganz" />
+            style="@style/IconButton"
+            android:contentDescription="Bild füllen"
+            android:src="@drawable/ic_fill" />
 
-        <Button
+        <ImageButton
+            android:id="@+id/btnPtz"
+            style="@style/IconButton"
+            android:contentDescription="Schwenken"
+            android:src="@drawable/ic_ptz" />
+
+        <ImageButton
             android:id="@+id/btnSettings"
-            style="@style/BarButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="0.7"
-            android:text="⚙"
-            android:textSize="18sp" />
+            style="@style/IconButton"
+            android:contentDescription="Einstellungen"
+            android:src="@drawable/ic_settings" />
     </LinearLayout>
 </FrameLayout>

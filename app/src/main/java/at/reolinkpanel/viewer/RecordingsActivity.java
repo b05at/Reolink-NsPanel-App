@@ -2,13 +2,15 @@ package at.reolinkpanel.viewer;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
-import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -24,25 +26,35 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Aufnahmen von der SD-Karte, nach Tag. */
+/** Aufnahmen von der SD-Karte, nach Tag, mit Vorschaubildern. */
 public class RecordingsActivity extends Activity {
 
     private static String cachedName;   // zuletzt geladene Aufnahme (Cache)
 
+    /** Kleiner Speicher-Cache für Vorschaubilder (~3 MB). */
+    private static final LruCache<String, Bitmap> THUMBS = new LruCache<String, Bitmap>(3 * 1024 * 1024) {
+        @Override protected int sizeOf(String key, Bitmap b) { return b.getByteCount(); }
+    };
+    /** Merkt sich Aufnahmen ohne Vorschaubild, damit nicht ständig gesucht wird. */
+    private static final java.util.Set<String> NO_THUMB =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private final List<ReolinkApi.Recording> items = new ArrayList<>();
-    private final SimpleDateFormat dayFmt = new SimpleDateFormat("EE, dd.MM.", Locale.GERMAN);
+    private final SimpleDateFormat dayFmt = new SimpleDateFormat("EEEE, d. MMMM", Locale.GERMAN);
     private final SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm:ss", Locale.GERMAN);
+    private final SimpleDateFormat shortFmt = new SimpleDateFormat("EE dd.MM. HH:mm", Locale.GERMAN);
 
     private Calendar day;
     private ReolinkApi api;
+    private ThumbStore thumbs;
     private int loadSeq;
     private volatile boolean cancel;
 
-    private TextView dateText, emptyText, progressText;
-    private View progressPanel;
+    private TextView dateText, countText, emptyText, progressText;
+    private View progressPanel, btnNext;
     private ProgressBar progressBar;
-    private Button btnNext;
     private RecAdapter adapter;
 
     @Override
@@ -52,9 +64,11 @@ public class RecordingsActivity extends Activity {
         setContentView(R.layout.activity_recordings);
 
         api = ReolinkApi.from(this);
+        thumbs = ThumbStore.get(this);
         day = midnight(Calendar.getInstance());
 
         dateText = findViewById(R.id.tvDate);
+        countText = findViewById(R.id.tvCount);
         emptyText = findViewById(R.id.tvEmpty);
         progressPanel = findViewById(R.id.progressPanel);
         progressText = findViewById(R.id.progressText);
@@ -91,13 +105,21 @@ public class RecordingsActivity extends Activity {
         load();
     }
 
-    @Override protected void onStart() { super.onStart(); AppState.visible++; }
+    @Override
+    protected void onStart() {
+        super.onStart();
+        AppState.visible++;
+        NO_THUMB.clear();                 // neue Vorschaubilder seit letztem Besuch berücksichtigen
+        adapter.notifyDataSetChanged();
+    }
+
     @Override protected void onStop() { AppState.visible--; super.onStop(); }
 
     @Override
     protected void onDestroy() {
         cancel = true;
         executor.shutdownNow();
+        thumbExecutor.shutdownNow();
         super.onDestroy();
     }
 
@@ -107,12 +129,13 @@ public class RecordingsActivity extends Activity {
         if (hasFocus) Ui.hideBars(this);
     }
 
-    // ------------------------------------------------------------
+    // ------------------------------------------------------------ Liste laden
 
     private void load() {
         dateText.setText(isToday() ? "Heute" : dayFmt.format(day.getTime()));
+        countText.setText("");
         btnNext.setEnabled(!isToday());
-        btnNext.setAlpha(isToday() ? 0.35f : 1f);
+        btnNext.setAlpha(isToday() ? 0.3f : 1f);
         items.clear();
         adapter.notifyDataSetChanged();
         emptyText.setText("Lade Aufnahmen…");
@@ -131,6 +154,7 @@ public class RecordingsActivity extends Activity {
                             items.clear();
                             items.addAll(result);
                             adapter.notifyDataSetChanged();
+                            countText.setText(result.size() == 1 ? "1 Aufnahme" : result.size() + " Aufnahmen");
                             emptyText.setText("Keine Aufnahmen an diesem Tag");
                             emptyText.setVisibility(result.isEmpty() ? View.VISIBLE : View.GONE);
                         }
@@ -147,6 +171,8 @@ public class RecordingsActivity extends Activity {
             }
         });
     }
+
+    // ------------------------------------------------------------ Abspielen
 
     private void play(final ReolinkApi.Recording rec) {
         final File out = new File(getCacheDir(), "clip.mp4");
@@ -172,7 +198,7 @@ public class RecordingsActivity extends Activity {
                                 runOnUiThread(new Runnable() {
                                     @Override public void run() {
                                         progressBar.setProgress(pct);
-                                        progressText.setText("Lade Aufnahme… " + mb(done)
+                                        progressText.setText("Lade Aufnahme…  " + mb(done)
                                                 + (total > 0 ? " / " + mb(total) : ""));
                                     }
                                 });
@@ -187,6 +213,11 @@ public class RecordingsActivity extends Activity {
                             if (!cancel) openPlayer(out, rec);
                         }
                     });
+                    // Vorschaubild aus der Aufnahme erzeugen, falls noch keines existiert
+                    if (thumbs.find(rec) == null) {
+                        thumbs.saveFromVideo(rec.name, out);
+                        NO_THUMB.remove(rec.name);
+                    }
                 } catch (final Exception e) {
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
@@ -205,12 +236,44 @@ public class RecordingsActivity extends Activity {
     private void openPlayer(File f, ReolinkApi.Recording rec) {
         Intent i = new Intent(this, PlaybackActivity.class)
                 .putExtra(PlaybackActivity.EXTRA_PATH, f.getAbsolutePath())
-                .putExtra(PlaybackActivity.EXTRA_TITLE,
-                        dayFmt.format(new Date(rec.start)) + "  " + timeFmt.format(new Date(rec.start)));
+                .putExtra(PlaybackActivity.EXTRA_TITLE, shortFmt.format(new Date(rec.start)));
         startActivity(i);
     }
 
-    // ------------------------------------------------------------
+    // ------------------------------------------------------------ Vorschaubilder
+
+    private void bindThumb(final ViewHolder h, final ReolinkApi.Recording rec) {
+        h.key = rec.name;
+        Bitmap cached = THUMBS.get(rec.name);
+        if (cached != null) {
+            showThumb(h, cached);
+            return;
+        }
+        showThumb(h, null);
+        if (NO_THUMB.contains(rec.name)) return;
+        thumbExecutor.execute(new Runnable() {
+            @Override public void run() {
+                if (!rec.name.equals(h.key)) return;   // Zeile wurde inzwischen wiederverwendet
+                File f = thumbs.find(rec);
+                final Bitmap b = f == null ? null : ThumbStore.load(f);
+                if (b != null) THUMBS.put(rec.name, b);
+                else NO_THUMB.add(rec.name);
+                if (b == null) return;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (rec.name.equals(h.key)) showThumb(h, b);
+                    }
+                });
+            }
+        });
+    }
+
+    private static void showThumb(ViewHolder h, Bitmap b) {
+        h.thumb.setImageBitmap(b);
+        h.placeholder.setVisibility(b == null ? View.VISIBLE : View.GONE);
+    }
+
+    // ------------------------------------------------------------ Hilfen
 
     private boolean isToday() {
         return day.getTimeInMillis() >= midnight(Calendar.getInstance()).getTimeInMillis();
@@ -230,7 +293,13 @@ public class RecordingsActivity extends Activity {
 
     private static String duration(long ms) {
         long s = Math.max(0, ms / 1000);
-        return String.format(Locale.GERMAN, "%d:%02d min", s / 60, s % 60);
+        return String.format(Locale.GERMAN, "%d:%02d", s / 60, s % 60);
+    }
+
+    private static class ViewHolder {
+        ImageView thumb, placeholder;
+        TextView time, info, dur;
+        String key;
     }
 
     private class RecAdapter extends BaseAdapter {
@@ -240,15 +309,26 @@ public class RecordingsActivity extends Activity {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            View v = convertView != null ? convertView
-                    : LayoutInflater.from(RecordingsActivity.this).inflate(R.layout.item_recording, parent, false);
+            View v = convertView;
+            ViewHolder h;
+            if (v == null) {
+                v = LayoutInflater.from(RecordingsActivity.this).inflate(R.layout.item_recording, parent, false);
+                h = new ViewHolder();
+                h.thumb = v.findViewById(R.id.ivThumb);
+                h.placeholder = v.findViewById(R.id.ivPlaceholder);
+                h.time = v.findViewById(R.id.tvTime);
+                h.info = v.findViewById(R.id.tvInfo);
+                h.dur = v.findViewById(R.id.tvDuration);
+                v.findViewById(R.id.thumbBox).setClipToOutline(true);   // runde Ecken, ohne Mehraufwand
+                v.setTag(h);
+            } else {
+                h = (ViewHolder) v.getTag();
+            }
             ReolinkApi.Recording r = items.get(position);
-            TextView time = v.findViewById(R.id.tvTime);
-            TextView info = v.findViewById(R.id.tvInfo);
-            time.setText(timeFmt.format(new Date(r.start)) + "  –  " + timeFmt.format(new Date(r.end)));
-            String extra = duration(r.end - r.start);
-            if (r.size > 0) extra += "  ·  " + mb(r.size);
-            info.setText(extra);
+            h.time.setText(timeFmt.format(new Date(r.start)));
+            h.info.setText("bis " + timeFmt.format(new Date(r.end)) + (r.size > 0 ? "  ·  " + mb(r.size) : ""));
+            h.dur.setText(duration(r.end - r.start));
+            bindThumb(h, r);
             return v;
         }
     }

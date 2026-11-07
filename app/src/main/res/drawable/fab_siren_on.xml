@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aktive Sirene: Gelb mit schwarzem Rand (gut erkennbar bei Rot-Grün-Schwäche) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/motion" />
+    <stroke android:width="2dp" android:color="#FF000000" />
+</shape>

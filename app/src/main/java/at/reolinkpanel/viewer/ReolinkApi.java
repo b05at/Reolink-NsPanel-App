@@ -200,7 +200,17 @@ public class ReolinkApi {
     // ---------------------------------------------------------------- Bewegung
 
     /** trigger: "any", "person", "person_vehicle" */
-    public boolean isMotion(String trigger) throws IOException, ApiException {
+    /** Rohzustand der normalen Bewegungserkennung. */
+    public boolean mdState() throws IOException, ApiException {
+        JSONObject v = call("GetMdState", channelParam()).optJSONObject("value");
+        return v != null && v.optInt("state", 0) == 1;
+    }
+
+    /**
+     * Ob der gewählte Auslöser aktiv ist. md = bereits abgefragter Bewegungszustand.
+     * trigger: "any", "person", "person_vehicle"
+     */
+    public boolean isMotion(String trigger, boolean md) throws IOException, ApiException {
         if (!"any".equals(trigger) && aiSupported) {
             try {
                 JSONObject v = call("GetAiState", channelParam()).optJSONObject("value");
@@ -213,8 +223,44 @@ public class ReolinkApi {
                 aiSupported = false;   // Fallback auf normale Bewegungserkennung
             }
         }
-        JSONObject v = call("GetMdState", channelParam()).optJSONObject("value");
-        return v != null && v.optInt("state", 0) == 1;
+        return md;
+    }
+
+    // ---------------------------------------------------------------- Schnappschuss
+
+    /** Aktuelles Kamerabild als JPEG (Breite/Höhe werden von neuerer Firmware berücksichtigt). */
+    public byte[] snap(int width, int height) throws IOException, ApiException {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            String url = base() + "?cmd=Snap&channel=0&rs=" + Long.toHexString(System.nanoTime())
+                    + "&width=" + width + "&height=" + height + "&token=" + token();
+            HttpURLConnection con = open(url, 15000);
+            try {
+                int http = con.getResponseCode();
+                InputStream is = http >= 400 ? con.getErrorStream() : con.getInputStream();
+                if (is == null) throw new IOException("HTTP " + http);
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buf = new byte[16384];
+                int n;
+                try {
+                    while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                } finally {
+                    is.close();
+                }
+                byte[] data = bos.toByteArray();
+                boolean jpeg = data.length > 3 && (data[0] & 0xFF) == 0xFF && (data[1] & 0xFF) == 0xD8;
+                if (jpeg) return data;
+                try {
+                    parse(new String(data, StandardCharsets.UTF_8));
+                } catch (ApiException e) {
+                    if (e.rspCode == -6 && attempt == 0) { invalidateToken(); continue; }
+                    throw e;
+                }
+                throw new IOException("Kein Bild erhalten");
+            } finally {
+                con.disconnect();
+            }
+        }
+        throw new IOException("Kein Bild erhalten");
     }
 
     private static boolean alarm(JSONObject v, String key) {

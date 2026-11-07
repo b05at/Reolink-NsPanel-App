@@ -19,7 +19,7 @@ import android.widget.Toast;
 public class SettingsActivity extends Activity {
 
     private EditText etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath, etWake, etPoll, etSiren, etPtzSpeed;
-    private CheckBox cbHttps, cbFront, cbBoot, cbOpenBoot;
+    private CheckBox cbHttps, cbFront, cbBoot, cbOpenBoot, cbThumbs;
     private RadioGroup rgLive, rgRec, rgTrigger;
     private TextView tvTest;
 
@@ -42,6 +42,7 @@ public class SettingsActivity extends Activity {
         cbFront = findViewById(R.id.cbFront);
         cbBoot = findViewById(R.id.cbBoot);
         cbOpenBoot = findViewById(R.id.cbOpenBoot);
+        cbThumbs = findViewById(R.id.cbThumbs);
         rgLive = findViewById(R.id.rgLive);
         rgRec = findViewById(R.id.rgRec);
         rgTrigger = findViewById(R.id.rgTrigger);
@@ -54,6 +55,9 @@ public class SettingsActivity extends Activity {
         });
         findViewById(R.id.btnTest).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { test(); }
+        });
+        findViewById(R.id.btnBackSettings).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { finish(); }
         });
         findViewById(R.id.btnBattery).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { batteryOptimization(); }
@@ -86,6 +90,7 @@ public class SettingsActivity extends Activity {
         cbFront.setChecked(Prefs.bringToFront(this));
         cbBoot.setChecked(Prefs.startOnBoot(this));
         cbOpenBoot.setChecked(Prefs.openOnBoot(this));
+        cbThumbs.setChecked(Prefs.thumbnails(this));
     }
 
     private void save() {
@@ -119,6 +124,7 @@ public class SettingsActivity extends Activity {
         e.putBoolean("bringToFront", cbFront.isChecked());
         e.putBoolean("startOnBoot", cbBoot.isChecked());
         e.putBoolean("openOnBoot", cbOpenBoot.isChecked());
+        e.putBoolean("thumbnails", cbThumbs.isChecked());
         e.apply();
 
         MotionService.reload(this);

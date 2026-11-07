@@ -12,7 +12,7 @@ import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -45,7 +45,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private ExoPlayer player;
     private View controls, sidePanel, ptzPanel;
     private TextView statusText, motionBadge;
-    private Button btnSound, btnStream, btnZoom, btnSiren, btnPtz;
+    private ImageButton btnSound, btnZoom, btnSiren, btnPtz;
+    private TextView btnStream;
     private DPadView dpad;
 
     // --- Stream-Auswahl mit automatischem Rückfall
@@ -518,13 +519,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateSiren() {
         if (sirenOn) {
-            btnSiren.setText("Sirene\nAUS");
-            btnSiren.setBackgroundResource(R.drawable.btn_siren_active);
-            btnSiren.setTextColor(0xFF000000);
+            btnSiren.setBackgroundResource(R.drawable.fab_siren_on);
+            btnSiren.setImageTintList(android.content.res.ColorStateList.valueOf(0xFF000000));
         } else {
-            btnSiren.setText("Sirene");
-            btnSiren.setBackgroundResource(R.drawable.btn_bg);
-            btnSiren.setTextColor(getColor(R.color.text));
+            btnSiren.setBackgroundResource(R.drawable.fab_dark);
+            btnSiren.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text)));
         }
         setControls(controls.getVisibility() == View.VISIBLE);
         updateKeepOn();
@@ -564,8 +563,14 @@ public class MainActivity extends Activity implements MotionService.Listener {
     }
 
     private void updateButtons() {
-        btnSound.setText(Prefs.muted(this) ? "Ton aus" : "Ton an");
-        btnStream.setText("sub".equals(Prefs.liveStream(this)) ? "SD" : "HD");
-        btnZoom.setText(Prefs.zoom(this) ? "Füllen" : "Ganz");
+        boolean muted = Prefs.muted(this);
+        btnSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
+        btnSound.setActivated(!muted);
+        boolean hd = !"sub".equals(Prefs.liveStream(this));
+        btnStream.setText(hd ? "HD" : "SD");
+        btnStream.setActivated(hd);
+        boolean fill = Prefs.zoom(this);
+        btnZoom.setImageResource(fill ? R.drawable.ic_fit : R.drawable.ic_fill);
+        btnZoom.setActivated(fill);
     }
 }

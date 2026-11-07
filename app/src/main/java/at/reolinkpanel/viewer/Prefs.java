@@ -41,6 +41,9 @@ public final class Prefs {
     /** Schwenk-Geschwindigkeit 1–64. */
     public static int ptzSpeed(Context c)       { return sp(c).getInt("ptzSpeed", 32); }
 
+    /** Vorschaubilder bei Bewegung speichern. */
+    public static boolean thumbnails(Context c) { return sp(c).getBoolean("thumbnails", true); }
+
     public static boolean muted(Context c)  { return sp(c).getBoolean("muted", true); }
     public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }
 

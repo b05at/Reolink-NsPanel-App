@@ -9,54 +9,95 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- Kopfzeile -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="4dp"
+            android:paddingRight="8dp">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                style="@style/IconButton"
+                android:contentDescription="Zurück"
+                android:src="@drawable/ic_back" />
+
+            <TextView
+                style="@style/Title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:layout_weight="1"
+                android:text="Aufnahmen" />
+
+            <TextView
+                android:id="@+id/btnToday"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/chip"
+                android:clickable="true"
+                android:drawableLeft="@drawable/ic_today"
+                android:drawablePadding="6dp"
+                android:drawableTint="@color/text"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingLeft="10dp"
+                android:paddingRight="12dp"
+                android:text="Heute"
+                android:textColor="@color/text"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Tagesauswahl -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/surface"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="10dp"
+            android:background="@drawable/card"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="3dp">
+            android:padding="4dp">
 
-            <Button
-                android:id="@+id/btnBack"
-                style="@style/BarButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/btn_bg"
-                android:text="‹ Live" />
-
-            <Button
+            <ImageButton
                 android:id="@+id/btnPrev"
-                style="@style/BarButton"
-                android:layout_width="44dp"
-                android:layout_height="wrap_content"
-                android:text="◀" />
+                style="@style/IconButton"
+                android:contentDescription="Vorheriger Tag"
+                android:src="@drawable/ic_chev_left" />
 
-            <TextView
-                android:id="@+id/tvDate"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:singleLine="true"
-                android:text="Heute"
-                android:textColor="@color/text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
-            <Button
+                <TextView
+                    android:id="@+id/tvDate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:singleLine="true"
+                    android:text="Heute"
+                    android:textColor="@color/text"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/tvCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/textDim"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <ImageButton
                 android:id="@+id/btnNext"
-                style="@style/BarButton"
-                android:layout_width="44dp"
-                android:layout_height="wrap_content"
-                android:text="▶" />
-
-            <Button
-                android:id="@+id/btnToday"
-                style="@style/BarButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Heute" />
+                style="@style/IconButton"
+                android:contentDescription="Nächster Tag"
+                android:src="@drawable/ic_chev_right" />
         </LinearLayout>
 
         <FrameLayout
@@ -68,14 +109,24 @@
                 android:id="@+id/list"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:divider="@color/surface"
-                android:dividerHeight="1dp" />
+                android:clipToPadding="false"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:listSelector="@android:color/transparent"
+                android:paddingLeft="10dp"
+                android:paddingTop="6dp"
+                android:paddingRight="10dp"
+                android:paddingBottom="10dp"
+                android:scrollbarStyle="outsideOverlay" />
 
             <TextView
                 android:id="@+id/tvEmpty"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:drawableTop="@drawable/ic_videocam"
+                android:drawablePadding="8dp"
+                android:drawableTint="@color/textDim"
                 android:gravity="center"
                 android:padding="16dp"
                 android:textColor="@color/textDim"
@@ -83,42 +134,52 @@
         </FrameLayout>
     </LinearLayout>
 
-    <LinearLayout
+    <!-- Ladeanzeige beim Download -->
+    <FrameLayout
         android:id="@+id/progressPanel"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/scrim"
         android:clickable="true"
         android:focusable="true"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="24dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/progressText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Lade Aufnahme…"
-            android:textColor="@color/text"
-            android:textSize="15sp" />
-
-        <ProgressBar
-            android:id="@+id/progressBar"
-            style="@android:style/Widget.Material.ProgressBar.Horizontal"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp"
-            android:max="100" />
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:background="@drawable/card"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <Button
-            android:id="@+id/btnCancel"
-            style="@style/BarButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingLeft="20dp"
-            android:paddingRight="20dp"
-            android:text="Abbrechen" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/progressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lade Aufnahme…"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp"
+                android:max="100"
+                android:progressTint="@color/accent" />
+
+            <Button
+                android:id="@+id/btnCancel"
+                style="@style/BarButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingLeft="24dp"
+                android:paddingRight="24dp"
+                android:text="Abbrechen" />
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>

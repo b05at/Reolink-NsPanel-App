@@ -1,112 +1,164 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
-    android:fillViewport="true">
+    android:orientation="vertical">
 
+    <!-- Kopfzeile -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="14dp">
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp"
+        android:paddingRight="10dp">
+
+        <ImageButton
+            android:id="@+id/btnBackSettings"
+            style="@style/IconButton"
+            android:contentDescription="Zurück"
+            android:src="@drawable/ic_back" />
 
         <TextView
-            android:layout_width="wrap_content"
+            style="@style/Title"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Einstellungen"
-            android:textColor="@color/text"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:layout_marginLeft="6dp"
+            android:layout_weight="1"
+            android:text="Einstellungen" />
 
-        <!-- Kamera -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Kamera" />
-
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="IP-Adresse" />
-        <EditText android:id="@+id/etHost" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. 192.168.1.50" android:inputType="textUri" />
-
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Benutzer" />
-        <EditText android:id="@+id/etUser" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="admin" android:inputType="text" />
-
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Passwort" />
-        <EditText android:id="@+id/etPass" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" />
-
-        <CheckBox android:id="@+id/cbHttps" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="HTTPS verwenden (Standard bei neuer Firmware)" />
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginRight="8dp">
-                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HTTP(S)-Port" />
-                <EditText android:id="@+id/etHttpPort" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Standard" android:inputType="number" />
-            </LinearLayout>
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RTSP-Port" />
-                <EditText android:id="@+id/etRtspPort" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="554" android:inputType="number" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
-            <Button android:id="@+id/btnTest" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Verbindung testen" />
-        </LinearLayout>
-        <TextView android:id="@+id/tvTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/textDim" android:textSize="13sp" />
-
-        <!-- Bild -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bildqualität" />
-
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Livebild" />
-        <RadioGroup android:id="@+id/rgLive" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-            <RadioButton android:id="@+id/rbLiveSub" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SD – Substream (empfohlen, flüssig)" />
-            <RadioButton android:id="@+id/rbLiveMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – höhere Auflösung (fällt automatisch auf SD zurück, falls nicht abspielbar)" />
-        </RadioGroup>
-
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aufnahmen abspielen in" />
-        <RadioGroup android:id="@+id/rgRec" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-            <RadioButton android:id="@+id/rbRecSub" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SD – klein, lädt schnell (empfohlen)" />
-            <RadioButton android:id="@+id/rbRecMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – 4K, große Dateien" />
-        </RadioGroup>
-
-        <!-- Bewegung -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bei Bewegung Bildschirm einschalten" />
-        <RadioGroup android:id="@+id/rgTrigger" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-            <RadioButton android:id="@+id/rbTrigOff" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aus" />
-            <RadioButton android:id="@+id/rbTrigAny" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bei jeder Bewegung" />
-            <RadioButton android:id="@+id/rbTrigPerson" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nur bei Personen" />
-            <RadioButton android:id="@+id/rbTrigPersonVehicle" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bei Personen und Fahrzeugen" />
-        </RadioGroup>
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginRight="8dp">
-                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Anzeigedauer (Sek.)" />
-                <EditText android:id="@+id/etWake" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="60" android:inputType="number" />
-            </LinearLayout>
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Abfrage alle (ms)" />
-                <EditText android:id="@+id/etPoll" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="1000" android:inputType="number" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <CheckBox android:id="@+id/cbFront" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Livebild bei Bewegung nach vorne holen" />
-
-        <!-- Sirene -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sirene" />
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Automatisch abschalten nach (Sek.)" />
-        <EditText android:id="@+id/etSiren" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="30" android:inputType="number" />
-
-        <!-- Schwenken -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Schwenken / Zoom" />
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Geschwindigkeit (1–64)" />
-        <EditText android:id="@+id/etPtzSpeed" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="32" android:inputType="number" />
-
-        <!-- Start -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Gerätestart" />
-        <CheckBox android:id="@+id/cbBoot" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Überwachung beim Start automatisch aktivieren" />
-        <CheckBox android:id="@+id/cbOpenBoot" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="App beim Start sofort öffnen" />
-        <Button android:id="@+id/btnBattery" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Von Akku-Optimierung ausnehmen" />
-
-        <!-- Erweitert -->
-        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Erweitert" />
-        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Eigener RTSP-Pfad (leer = automatisch)" />
-        <EditText android:id="@+id/etRtspPath" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. h264Preview_01_sub" android:inputType="textUri" android:imeOptions="actionDone" />
-
-        <Button android:id="@+id/btnSave" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:layout_marginBottom="24dp" android:background="@drawable/btn_primary" android:text="Speichern" android:textColor="#000000" android:textStyle="bold" />
+        <Button
+            android:id="@+id/btnSave"
+            style="@style/BarButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minHeight="40dp"
+            android:background="@drawable/btn_primary"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:text="Speichern"
+            android:textColor="#000000" />
     </LinearLayout>
-</ScrollView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:paddingBottom="16dp">
+
+            <!-- Kamera -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Kamera" />
+
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="IP-Adresse" />
+                <EditText android:id="@+id/etHost" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. 192.168.1.50" android:inputType="textUri" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginRight="8dp" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Benutzer" />
+                        <EditText android:id="@+id/etUser" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="admin" android:inputType="text" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Passwort" />
+                        <EditText android:id="@+id/etPass" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <CheckBox android:id="@+id/cbHttps" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="HTTPS verwenden (Standard bei neuer Firmware)" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginRight="8dp" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HTTP(S)-Port" />
+                        <EditText android:id="@+id/etHttpPort" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Standard" android:inputType="number" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RTSP-Port" />
+                        <EditText android:id="@+id/etRtspPort" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="554" android:inputType="number" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <Button android:id="@+id/btnTest" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/chip" android:text="Verbindung testen" />
+                <TextView android:id="@+id/tvTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/textDim" android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Bewegung -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bei Bewegung Bildschirm einschalten" />
+                <RadioGroup android:id="@+id/rgTrigger" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <RadioButton android:id="@+id/rbTrigOff" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aus" />
+                    <RadioButton android:id="@+id/rbTrigAny" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bei jeder Bewegung" />
+                    <RadioButton android:id="@+id/rbTrigPerson" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nur bei Personen" />
+                    <RadioButton android:id="@+id/rbTrigPersonVehicle" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bei Personen und Fahrzeugen" />
+                </RadioGroup>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginRight="8dp" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Anzeigedauer (Sek.)" />
+                        <EditText android:id="@+id/etWake" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="60" android:inputType="number" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Abfrage alle (ms)" />
+                        <EditText android:id="@+id/etPoll" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="1000" android:inputType="number" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <CheckBox android:id="@+id/cbFront" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Livebild bei Bewegung nach vorne holen" />
+                <CheckBox android:id="@+id/cbThumbs" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Vorschaubilder für Aufnahmen speichern" />
+            </LinearLayout>
+
+            <!-- Bild -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bildqualität" />
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Livebild" />
+                <RadioGroup android:id="@+id/rgLive" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <RadioButton android:id="@+id/rbLiveSub" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SD – flüssig, wenig CPU (empfohlen)" />
+                    <RadioButton android:id="@+id/rbLiveMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – fällt automatisch auf SD zurück, falls nicht abspielbar" />
+                </RadioGroup>
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aufnahmen abspielen in" />
+                <RadioGroup android:id="@+id/rgRec" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <RadioButton android:id="@+id/rbRecSub" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SD – lädt schnell (empfohlen)" />
+                    <RadioButton android:id="@+id/rbRecMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – große Dateien" />
+                </RadioGroup>
+            </LinearLayout>
+
+            <!-- Steuerung -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Schwenken &amp; Sirene" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginRight="8dp" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Schwenk-Tempo (1–64)" />
+                        <EditText android:id="@+id/etPtzSpeed" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="32" android:inputType="number" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sirene max. (Sek.)" />
+                        <EditText android:id="@+id/etSiren" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="30" android:inputType="number" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- System -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Gerätestart" />
+                <CheckBox android:id="@+id/cbBoot" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Überwachung beim Start automatisch aktivieren" />
+                <CheckBox android:id="@+id/cbOpenBoot" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="App beim Start sofort öffnen" />
+                <Button android:id="@+id/btnBattery" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/chip" android:text="Von Akku-Optimierung ausnehmen" />
+            </LinearLayout>
+
+            <!-- Erweitert -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Erweitert" />
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Eigener RTSP-Pfad (leer = automatisch)" />
+                <EditText android:id="@+id/etRtspPath" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. h264Preview_01_sub" android:inputType="textUri" android:imeOptions="actionDone" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
