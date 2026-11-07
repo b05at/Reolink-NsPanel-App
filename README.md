@@ -21,14 +21,11 @@ In der Reolink-App oder im Reolink-Client unter *Einstellungen → Netzwerk → 
 
 Am besten gibst du der Kamera im Router eine **feste IP-Adresse** (DHCP-Reservierung).
 
-## 2. APK bauen (kostenlos über GitHub, ohne Installation)
+## 2. APK herunterladen
 
-1. Auf github.com ein **privates Repository** anlegen.
-2. Den Inhalt dieses Ordners hochladen (*Add file → Upload files*, alle Dateien und Ordner hineinziehen). Wichtig ist, dass auch der Ordner `.github/workflows` mit hochgeladen wird.
-3. Den Reiter **Actions** öffnen. Der Build „APK bauen“ startet automatisch, sonst über *Run workflow* starten.
-4. Nach ca. 3–5 Minuten unten unter **Artifacts** auf **Kamera-APK** klicken. Das ZIP enthält `app-debug.apk`.
+**Neueste Version:** <https://github.com/b05at/Reolink-NsPanel-App/releases/latest/download/Kamera.apk>
 
-Alternativ: Den Ordner in **Android Studio** öffnen und *Build → Build APK(s)* wählen.
+Alle Versionen findest du unter [Releases](https://github.com/b05at/Reolink-NsPanel-App/releases). Jede Änderung am Code wird von GitHub Actions automatisch gebaut und als neues Release veröffentlicht.
 
 ## 3. Auf dem NSPanel Pro installieren
 
@@ -36,7 +33,7 @@ Für das Panel muss ADB aktiviert sein. Eine Anleitung dazu findest du hier: <ht
 
 ```bash
 adb connect <IP-des-Panels>:5555
-adb install app-debug.apk
+adb install -r Kamera.apk
 adb shell am start -n at.reolinkpanel.viewer/.MainActivity
 ```
 

@@ -2,7 +2,11 @@ name: APK bauen
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write   # zum Anlegen der Releases
 
 jobs:
   build:
@@ -27,7 +31,26 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Version ermitteln
+        id: ver
+        run: |
+          VERSION=$(grep -m1 "versionName" app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION-build$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          cp app/build/outputs/apk/debug/app-debug.apk Kamera.apk
+
       - uses: actions/upload-artifact@v6
         with:
           name: Kamera-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: Kamera.apk
+
+      # Jede Version als Release – Download ohne Anmeldung, ohne ZIP.
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" Kamera.apk \
+            --title "Kamera ${{ steps.ver.outputs.version }} (Build ${{ github.run_number }})" \
+            --notes "$(git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):')" \
+            --target "${{ github.sha }}" \
+            --latest
