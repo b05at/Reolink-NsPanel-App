@@ -25,11 +25,13 @@
                 android:src="@drawable/ic_back" />
 
             <TextView
+                android:id="@+id/tvRecTitle"
                 style="@style/Title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="6dp"
                 android:layout_weight="1"
+                android:singleLine="true"
                 android:text="Aufnahmen" />
 
             <TextView

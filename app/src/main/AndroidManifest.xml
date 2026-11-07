@@ -39,6 +39,11 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".CameraEditActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <service android:name=".MotionService" android:exported="false" />
 
         <receiver android:name=".BootReceiver" android:exported="true">

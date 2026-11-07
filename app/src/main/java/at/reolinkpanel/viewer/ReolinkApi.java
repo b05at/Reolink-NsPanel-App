@@ -65,9 +65,15 @@ public class ReolinkApi {
         this.rtspPathOverride = rtspPath == null ? "" : rtspPath;
     }
 
+    /** API der aktuell gewählten Kamera. */
     public static ReolinkApi from(Context c) {
-        return new ReolinkApi(Prefs.host(c), Prefs.user(c), Prefs.pass(c), Prefs.https(c),
-                Prefs.httpPort(c), Prefs.rtspPort(c), Prefs.rtspPath(c));
+        Cam cam = Prefs.current(c);
+        return from(cam != null ? cam : new Cam());
+    }
+
+    public static ReolinkApi from(Cam cam) {
+        return new ReolinkApi(cam.host.trim(), cam.user.trim(), cam.pass, cam.https,
+                cam.httpPort, cam.rtspPort, cam.rtspPath.trim());
     }
 
     // ---------------------------------------------------------------- Livebild
@@ -266,6 +272,53 @@ public class ReolinkApi {
     private static boolean alarm(JSONObject v, String key) {
         JSONObject o = v.optJSONObject(key);
         return o != null && o.optInt("alarm_state", 0) == 1;
+    }
+
+    // ---------------------------------------------------------------- Türklingel
+
+    /** Ergebnis von GetEvents (neuere Firmware, u. a. Video Doorbell). */
+    public static class Events {
+        public boolean md, visitor, visitorSupported;
+    }
+
+    public Events events() throws IOException, ApiException {
+        JSONObject v = call("GetEvents", channelParam()).optJSONObject("value");
+        Events e = new Events();
+        if (v == null) return e;
+        JSONObject md = v.optJSONObject("md");
+        e.md = md != null && md.optInt("alarm_state", 0) == 1;
+        JSONObject vis = v.optJSONObject("visitor");
+        e.visitorSupported = vis != null;
+        e.visitor = vis != null && vis.optInt("alarm_state", 0) == 1;
+        return e;
+    }
+
+    // ---------------------------------------------------------------- Scheinwerfer
+
+    public boolean whiteLed() throws IOException, ApiException {
+        JSONObject v = call("GetWhiteLed", channelParam()).optJSONObject("value");
+        JSONObject w = v == null ? null : v.optJSONObject("WhiteLed");
+        return w != null && w.optInt("state", 0) == 1;
+    }
+
+    public void setWhiteLed(boolean on) throws IOException, ApiException {
+        try {
+            JSONObject w = new JSONObject();
+            w.put("channel", 0);
+            w.put("state", on ? 1 : 0);
+            JSONObject p = new JSONObject();
+            p.put("WhiteLed", w);
+            call("SetWhiteLed", p);
+        } catch (JSONException e) {
+            throw new IOException(e.getMessage());
+        }
+    }
+
+    /** Modellname laut Kamera (für die automatische Erkennung der Türklingel). */
+    public String model() throws IOException, ApiException {
+        JSONObject v = call("GetDevInfo", channelParam()).optJSONObject("value");
+        JSONObject d = v == null ? null : v.optJSONObject("DevInfo");
+        return d == null ? "" : d.optString("model", "");
     }
 
     // ---------------------------------------------------------------- PTZ

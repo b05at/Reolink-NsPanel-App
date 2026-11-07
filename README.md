@@ -1,10 +1,13 @@
 # Kamera – Reolink-Viewer für das Sonoff NSPanel Pro (Gen 1)
 
-Schlanke Android-App (ab Android 8.0) für die **Reolink E1 Outdoor Pro**, ohne Reolink-App und ohne Cloud.
+Schlanke Android-App (ab Android 8.0) für Reolink-Kameras und die **Reolink Video Doorbell** – entwickelt für die E1 Outdoor Pro, ohne Reolink-App und ohne Cloud.
 
 - **Livebild** per RTSP (SD-Substream als Standard, HD/4K umschaltbar), Ton optional
 - **Aufnahmen** von der SD-Karte nach Tag durchblättern und abspielen (mit Suchleiste und Vorschaubildern)
 - **Bewegungserkennung**: Bei Bewegung (wahlweise nur Personen bzw. Personen + Fahrzeuge) schaltet sich das Display ein und das Livebild erscheint
+- **Mehrere Kameras**: Kamera oben links wählen oder alle in der **Übersicht** (Raster) anzeigen
+- **Türklingel**: Beim Läuten schaltet sich der Bildschirm ein, das Bild der Klingel erscheint und das Panel gongt
+- **Scheinwerfer** ein-/ausschalten
 - **Schwenken/Neigen/Zoom** über ein einblendbares Steuerkreuz
 - **Sirene** der Kamera per Knopf auslösen (mit Sicherheitsabfrage, schaltet sich automatisch ab)
 - Startet nach einem Neustart des Panels automatisch
@@ -49,10 +52,20 @@ Beim ersten Start öffnen sich die Einstellungen:
 4. **Von Akku-Optimierung ausnehmen** antippen.
 5. **Speichern**.
 
+## Mehrere Kameras & Türklingel
+
+Unter ⚙ → *Kameras & Türklingeln* beliebig viele Kameras anlegen. Pro Kamera einstellbar: Name, Zugang, ob sie eine **Türklingel** ist (wird beim Verbindungstest automatisch erkannt) und ob ihre Bewegung den Bildschirm einschaltet.
+
+- **Übersicht** (Raster-Symbol oben links): alle Kameras gleichzeitig. Standardmäßig als Standbilder, die alle 2 s aktualisiert werden – das braucht kaum CPU. Optional Livevideo für bis zu 4 Kameras.
+- Antippen einer Kachel öffnet das große Livebild dieser Kamera.
+- Bei Bewegung wird die Kachel gelb umrandet. Läutet die Türklingel, wechselt die Anzeige sofort auf die Klingel und kehrt danach zur Übersicht zurück.
+- Die Klingel-Erkennung nutzt den API-Befehl `GetEvents` (aktuelle Doorbell-Firmware erforderlich).
+
 ## Bedienung
 
 - **Tippen aufs Bild** blendet die Bedienleiste ein: Aufnahmen · Ton · SD/HD · Ganz/Füllen · ⚙
 - **Schwenken** (rechts oben): blendet das Steuerkreuz ein. Gedrückt halten = Kamera bewegt sich, loslassen = Stopp. Mit + / − zoomen.
+- **Scheinwerfer** (rechts oben, Glühbirne): ein/aus. Leuchtet hell hinterlegt, solange er an ist.
 - **Sirene** (rechts oben): Nach Bestätigung ertönt die Sirene. Solange sie läuft, ist der Knopf gelb und dauerhaft sichtbar, ein Tippen schaltet sie sofort ab. Spätestens nach der eingestellten Zeit (Standard 30 s) oder beim Verlassen des Livebilds geht sie automatisch aus.
 - **Ganz/Füllen**: „Füllen“ schneidet das 16:9-Bild seitlich ab, sodass das quadratische Display voll ausgefüllt ist.
 - Die Aufnahmen werden vor dem Abspielen kurz geladen. Mit SD geht das schnell.

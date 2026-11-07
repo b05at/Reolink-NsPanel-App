@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -34,7 +35,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Livebild der Kamera – Startbildschirm der App. */
+/** Livebild einer Kamera bzw. Übersicht aller Kameras – Startbildschirm der App. */
 public class MainActivity extends Activity implements MotionService.Listener {
 
     private static final long CONTROLS_TIMEOUT_MS = 8000;
@@ -43,22 +44,33 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private PlayerView playerView;
     private ExoPlayer player;
-    private View controls, sidePanel, ptzPanel;
-    private TextView statusText, motionBadge;
-    private ImageButton btnSound, btnZoom, btnSiren, btnPtz;
+    private DashboardView dashboard;
+    private View controls, sidePanel, topLeft, ptzPanel;
+    private TextView statusText, motionBadge, camChip;
+    private ImageButton btnSound, btnZoom, btnSiren, btnPtz, btnLight, btnGrid, btnRec;
     private TextView btnStream;
     private DPadView dpad;
+
+    // --- Kameras / Ansicht
+    private List<Cam> cams = new ArrayList<>();
+    private Cam cam;
+    private boolean gridMode;
+    private boolean started;
+    /** Nach einem Ereignis automatisch zurück zur Übersicht. */
+    private boolean returnToGrid;
+    private String badgeCamId;
 
     // --- Stream-Auswahl mit automatischem Rückfall
     private final List<String> candidates = new ArrayList<>();
     private int candIdx;
     private boolean gotFrame;
 
-    // --- Kamera-Befehle (Sirene, PTZ) – nacheinander im Hintergrund
+    // --- Kamera-Befehle (Sirene, PTZ, Licht) – nacheinander im Hintergrund
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private ReolinkApi camApi;
     private boolean sirenOn = false;
     private boolean sirenBusy = false;
+    private boolean lightOn = false;
     private boolean ptzMoving = false;
     private boolean ptzErrorShown = false;
 
@@ -90,22 +102,28 @@ public class MainActivity extends Activity implements MotionService.Listener {
         setContentView(R.layout.activity_main);
 
         playerView = findViewById(R.id.player);
+        dashboard = findViewById(R.id.dashboard);
         controls = findViewById(R.id.controls);
         sidePanel = findViewById(R.id.sidePanel);
+        topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
         statusText = findViewById(R.id.status);
         motionBadge = findViewById(R.id.motionBadge);
+        camChip = findViewById(R.id.camChip);
+        btnRec = findViewById(R.id.btnRec);
         btnSound = findViewById(R.id.btnSound);
         btnStream = findViewById(R.id.btnStream);
         btnZoom = findViewById(R.id.btnZoom);
         btnSiren = findViewById(R.id.btnSiren);
         btnPtz = findViewById(R.id.btnPtz);
+        btnLight = findViewById(R.id.btnLight);
+        btnGrid = findViewById(R.id.btnGrid);
         dpad = findViewById(R.id.dpad);
 
         findViewById(R.id.touch).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { toggleControls(); }
         });
-        findViewById(R.id.btnRec).setOnClickListener(new View.OnClickListener() {
+        btnRec.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 startActivity(new Intent(MainActivity.this, RecordingsActivity.class));
             }
@@ -138,7 +156,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 Prefs.sp(MainActivity.this).edit().putBoolean("zoom", !Prefs.zoom(MainActivity.this)).apply();
                 applyZoom();
                 updateButtons();
-                showControls();
+                if (gridMode) applyMode(); else showControls();
             }
         });
         btnSiren.setOnClickListener(new View.OnClickListener() {
@@ -147,8 +165,27 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 else confirmSiren();
             }
         });
+        btnLight.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { setLight(!lightOn); showControls(); }
+        });
         btnPtz.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { setPtzVisible(ptzPanel.getVisibility() != View.VISIBLE); }
+        });
+        btnGrid.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (gridMode) switchToCam(cam != null ? cam.id : null, true);
+                else showGrid();
+            }
+        });
+        camChip.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { pickCamera(); }
+        });
+        motionBadge.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (badgeCamId != null && (gridMode || cam == null || !badgeCamId.equals(cam.id))) {
+                    switchToCam(badgeCamId, false);
+                }
+            }
         });
         findViewById(R.id.btnPtzClose).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { setPtzVisible(false); }
@@ -158,12 +195,16 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
         holdButton(findViewById(R.id.btnZoomIn), "ZoomInc");
         holdButton(findViewById(R.id.btnZoomOut), "ZoomDec");
+        dashboard.setOnTileClick(new DashboardView.OnTileClick() {
+            @Override public void onTile(Cam c) { switchToCam(c.id, true); }
+        });
 
         updateButtons();
         updateSiren();
+        updateLight();
 
         if (!Prefs.isConfigured(this)) {
-            startActivity(new Intent(this, SettingsActivity.class));
+            startActivity(new Intent(this, CameraEditActivity.class));
         } else {
             MotionService.start(this);
         }
@@ -173,10 +214,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (intent.getBooleanExtra(MotionService.EXTRA_MOTION, false)) {
-            handler.removeCallbacks(hideControls);
-            setControls(false);
-        }
+        if (started && handleEventIntent(intent)) applyMode();
     }
 
     @Override
@@ -184,20 +222,21 @@ public class MainActivity extends Activity implements MotionService.Listener {
         super.onStart();
         AppState.visible++;
         AppState.liveVisible = true;
+        started = true;
+        cams = Prefs.cameras(this);
+        cam = Prefs.current(this);
         camApi = null;   // Einstellungen könnten sich geändert haben
+        gridMode = cams.size() >= 2 && "grid".equals(Prefs.viewMode(this));
+        boolean event = handleEventIntent(getIntent());
         MotionService.setListener(this);
-        applyMotion(MotionService.motionActive);
-        startLive();
-        if (getIntent() != null && getIntent().getBooleanExtra(MotionService.EXTRA_MOTION, false)) {
-            setControls(false);
-            getIntent().removeExtra(MotionService.EXTRA_MOTION);
-        } else {
-            showControls();
-        }
+        applyMode();
+        applyMotion(MotionService.motionActive, MotionService.activeCamId, MotionService.activeRing);
+        if (event) setControls(false); else showControls();
     }
 
     @Override
     protected void onStop() {
+        started = false;
         AppState.visible--;
         AppState.liveVisible = false;
         MotionService.clearListener(this);
@@ -205,6 +244,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
         setPtzVisible(false);           // stoppt auch laufende Schwenks
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
+        dashboard.stop();
+        if (returnToGrid) {
+            returnToGrid = false;
+            Prefs.setViewMode(this, "grid");
+        }
         super.onStop();
     }
 
@@ -224,20 +268,148 @@ public class MainActivity extends Activity implements MotionService.Listener {
     public void onBackPressed() {
         // Am Panel nicht versehentlich beenden.
         if (ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
+        else if (!gridMode && cams.size() >= 2) showGrid();
         else showControls();
     }
 
-    // ------------------------------------------------------------ Bewegung
+    // ------------------------------------------------------------ Ansicht
+
+    /** Ereignis-Intent (Bewegung/Klingel) auswerten. true = Ansicht wurde umgestellt. */
+    private boolean handleEventIntent(Intent i) {
+        if (i == null || !i.getBooleanExtra(MotionService.EXTRA_MOTION, false)) return false;
+        String id = i.getStringExtra(MotionService.EXTRA_CAM);
+        i.removeExtra(MotionService.EXTRA_MOTION);
+        Cam c = Prefs.camera(this, id);
+        if (c == null) return false;
+        if (gridMode) returnToGrid = true;
+        gridMode = false;
+        selectCam(c);
+        return true;
+    }
+
+    private void selectCam(Cam c) {
+        if (cam != null && !cam.id.equals(c.id)) {
+            if (sirenOn) setSiren(false);
+            setPtzVisible(false);
+        }
+        cam = c;
+        camApi = null;
+        lightOn = false;
+        Prefs.setCurrent(this, c.id);
+    }
+
+    private void switchToCam(String id, boolean userChoice) {
+        Cam c = Prefs.camera(this, id);
+        if (c == null) return;
+        if (userChoice) {
+            returnToGrid = false;
+            Prefs.setViewMode(this, "single");
+        } else if (gridMode) {
+            returnToGrid = true;
+        }
+        gridMode = false;
+        selectCam(c);
+        applyMode();
+        showControls();
+    }
+
+    private void showGrid() {
+        if (cams.size() < 2) return;
+        if (sirenOn) setSiren(false);
+        setPtzVisible(false);
+        returnToGrid = false;
+        gridMode = true;
+        Prefs.setViewMode(this, "grid");
+        applyMode();
+        showControls();
+    }
+
+    private void applyMode() {
+        cams = Prefs.cameras(this);
+        if (cams.size() < 2) gridMode = false;
+        if (cam == null) cam = Prefs.current(this);
+        btnGrid.setVisibility(cams.size() >= 2 ? View.VISIBLE : View.GONE);
+        btnGrid.setActivated(gridMode);
+        boolean single = !gridMode;
+        boolean bell = cam != null && cam.doorbell;
+        btnRec.setVisibility(single ? View.VISIBLE : View.GONE);
+        btnSound.setVisibility(single ? View.VISIBLE : View.GONE);
+        btnStream.setVisibility(single ? View.VISIBLE : View.GONE);
+        btnPtz.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
+        btnLight.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
+        btnSiren.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
+        camChip.setText(gridMode ? "Alle Kameras ▾" : (cam != null ? cam.displayName() : "Kamera") + (cams.size() >= 2 ? " ▾" : ""));
+
+        if (gridMode) {
+            stopLive();
+            hideStatus();
+            playerView.setVisibility(View.GONE);
+            dashboard.setVisibility(View.VISIBLE);
+            dashboard.start(cams, Prefs.gridLive(this), Prefs.gridSeconds(this), Prefs.zoom(this));
+            dashboard.setActive(MotionService.activeCamId, MotionService.motionActive, MotionService.activeRing);
+        } else {
+            dashboard.stop();
+            dashboard.setVisibility(View.GONE);
+            playerView.setVisibility(View.VISIBLE);
+            startLive();
+            if (!bell) queryLight();
+        }
+        updateLight();
+        setControls(controls.getVisibility() == View.VISIBLE);
+    }
+
+    private void pickCamera() {
+        if (cams.size() < 2) { showControls(); return; }
+        handler.removeCallbacks(hideControls);
+        final List<String> labels = new ArrayList<>();
+        labels.add("▦  Alle Kameras (Übersicht)");
+        for (Cam c : cams) labels.add((c.doorbell ? "🔔  " : "◉  ") + c.displayName());
+        new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Kamera wählen")
+                .setItems(labels.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) {
+                        if (which == 0) showGrid();
+                        else switchToCam(cams.get(which - 1).id, true);
+                    }
+                })
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override public void onDismiss(DialogInterface dialog) {
+                        Ui.hideBars(MainActivity.this);
+                        showControls();
+                    }
+                })
+                .show();
+    }
+
+    // ------------------------------------------------------------ Bewegung / Klingel
 
     @Override
-    public void onMotionChanged(final boolean active) {
+    public void onMotionChanged(final boolean active, final String camId, final boolean ring) {
         runOnUiThread(new Runnable() {
-            @Override public void run() { applyMotion(active); }
+            @Override public void run() {
+                if (!started) return;
+                // Klingeln: sofort auf die Türklingel umschalten
+                if (active && ring && camId != null && (gridMode || cam == null || !camId.equals(cam.id))) {
+                    switchToCam(camId, false);
+                }
+                applyMotion(active, camId, ring);
+                // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
+                if (!active && returnToGrid) showGrid();
+            }
         });
     }
 
-    private void applyMotion(boolean active) {
-        motionBadge.setVisibility(active ? View.VISIBLE : View.GONE);
+    private void applyMotion(boolean active, String camId, boolean ring) {
+        badgeCamId = active ? camId : null;
+        if (active) {
+            Cam c = Prefs.camera(this, camId);
+            String name = c != null && cams.size() >= 2 ? " – " + c.displayName() : "";
+            motionBadge.setText((ring ? "🔔 ES HAT GELÄUTET" : "● BEWEGUNG") + name);
+            motionBadge.setVisibility(View.VISIBLE);
+        } else {
+            motionBadge.setVisibility(View.GONE);
+        }
+        if (gridMode) dashboard.setActive(camId, active, ring);
         updateKeepOn();
     }
 
@@ -258,7 +430,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
      */
     private void startLive() {
         candidates.clear();
-        if (!Prefs.rtspPath(this).isEmpty() || "sub".equals(Prefs.liveStream(this))) {
+        if (cam == null || !cam.rtspPath.trim().isEmpty() || "sub".equals(Prefs.liveStream(this))) {
             candidates.add("sub");
         } else {
             candidates.addAll(Arrays.asList("ext", "main", "sub"));
@@ -273,8 +445,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void playCandidate() {
         stopLive();
-        if (!Prefs.isConfigured(this)) {
-            showStatus("Bitte zuerst die Kamera einrichten (⚙)");
+        if (gridMode) return;
+        if (cam == null) {
+            showStatus("Bitte zuerst eine Kamera einrichten (⚙)");
             return;
         }
         final String stream = candidates.get(candIdx);
@@ -289,7 +462,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         playerView.setPlayer(player);
         applyZoom();
 
-        String url = ReolinkApi.from(this).rtspUrl(stream);
+        String url = ReolinkApi.from(cam).rtspUrl(stream);
         MediaSource source = new RtspMediaSource.Factory()
                 .setForceUseRtpTcp(true)
                 .setTimeoutMs(8000)
@@ -383,8 +556,62 @@ public class MainActivity extends Activity implements MotionService.Listener {
     // ------------------------------------------------------------ Kamera-Befehle
 
     private ReolinkApi api() {
-        if (camApi == null) camApi = ReolinkApi.from(this);
+        if (camApi == null) camApi = cam != null ? ReolinkApi.from(cam) : ReolinkApi.from(this);
         return camApi;
+    }
+
+    // ------------------------------------------------------------ Scheinwerfer
+
+    private void queryLight() {
+        final ReolinkApi a = api();
+        final String camId = cam.id;
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    final boolean on = a.whiteLed();
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            if (cam != null && camId.equals(cam.id)) { lightOn = on; updateLight(); }
+                        }
+                    });
+                } catch (Exception ignored) {
+                    // Kamera ohne Scheinwerfer oder offline – Knopf bleibt aus
+                }
+            }
+        });
+    }
+
+    private void setLight(final boolean on) {
+        lightOn = on;   // sofort anzeigen
+        updateLight();
+        final ReolinkApi a = api();
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    a.setWhiteLed(on);
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            if (isDestroyed()) return;
+                            lightOn = !on;
+                            updateLight();
+                            Toast.makeText(MainActivity.this, "Scheinwerfer: " + e.getMessage(),
+                                    Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void updateLight() {
+        if (lightOn) {
+            btnLight.setBackgroundResource(R.drawable.fab_light_on);
+            btnLight.setImageTintList(ColorStateList.valueOf(0xFF000000));
+        } else {
+            btnLight.setBackgroundResource(R.drawable.fab_dark);
+            btnLight.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+        }
     }
 
     // ------------------------------------------------------------ PTZ
@@ -520,10 +747,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void updateSiren() {
         if (sirenOn) {
             btnSiren.setBackgroundResource(R.drawable.fab_siren_on);
-            btnSiren.setImageTintList(android.content.res.ColorStateList.valueOf(0xFF000000));
+            btnSiren.setImageTintList(ColorStateList.valueOf(0xFF000000));
         } else {
             btnSiren.setBackgroundResource(R.drawable.fab_dark);
-            btnSiren.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text)));
+            btnSiren.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
         }
         setControls(controls.getVisibility() == View.VISIBLE);
         updateKeepOn();
@@ -531,9 +758,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     // ------------------------------------------------------------ UI
 
-    /** Bedienleiste + Seitenknöpfe ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
+    /** Bedienleiste + obere Knöpfe ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
     private void setControls(boolean show) {
+        if (gridMode) show = true;   // in der Übersicht immer bedienbar
         controls.setVisibility(show ? View.VISIBLE : View.GONE);
+        topLeft.setVisibility(show ? View.VISIBLE : View.GONE);
         sidePanel.setVisibility(show || sirenOn ? View.VISIBLE : View.GONE);
         if (!show && ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
     }
@@ -557,7 +786,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void showControls() {
         setControls(true);
         handler.removeCallbacks(hideControls);
-        if (ptzPanel.getVisibility() != View.VISIBLE) {
+        if (ptzPanel.getVisibility() != View.VISIBLE && !gridMode) {
             handler.postDelayed(hideControls, CONTROLS_TIMEOUT_MS);
         }
     }

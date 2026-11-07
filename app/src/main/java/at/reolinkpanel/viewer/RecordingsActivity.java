@@ -49,6 +49,7 @@ public class RecordingsActivity extends Activity {
     private Calendar day;
     private ReolinkApi api;
     private ThumbStore thumbs;
+    private String camId = "c1";
     private int loadSeq;
     private volatile boolean cancel;
 
@@ -65,6 +66,13 @@ public class RecordingsActivity extends Activity {
 
         api = ReolinkApi.from(this);
         thumbs = ThumbStore.get(this);
+        Cam cam = Prefs.current(this);
+        if (cam != null) {
+            camId = cam.id;
+            if (Prefs.cameras(this).size() >= 2) {
+                ((TextView) findViewById(R.id.tvRecTitle)).setText(cam.displayName());
+            }
+        }
         day = midnight(Calendar.getInstance());
 
         dateText = findViewById(R.id.tvDate);
@@ -176,7 +184,8 @@ public class RecordingsActivity extends Activity {
 
     private void play(final ReolinkApi.Recording rec) {
         final File out = new File(getCacheDir(), "clip.mp4");
-        if (rec.name.equals(cachedName) && out.exists()) {
+        final String key = camId + "/" + rec.name;
+        if (key.equals(cachedName) && out.exists()) {
             openPlayer(out, rec);
             return;
         }
@@ -206,7 +215,7 @@ public class RecordingsActivity extends Activity {
                             return !cancel;
                         }
                     });
-                    cachedName = rec.name;
+                    cachedName = key;
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
                             progressPanel.setVisibility(View.GONE);
@@ -214,9 +223,9 @@ public class RecordingsActivity extends Activity {
                         }
                     });
                     // Vorschaubild aus der Aufnahme erzeugen, falls noch keines existiert
-                    if (thumbs.find(rec) == null) {
-                        thumbs.saveFromVideo(rec.name, out);
-                        NO_THUMB.remove(rec.name);
+                    if (thumbs.find(camId, rec) == null) {
+                        thumbs.saveFromVideo(camId, rec.name, out);
+                        NO_THUMB.remove(key);
                     }
                 } catch (final Exception e) {
                     runOnUiThread(new Runnable() {
@@ -243,25 +252,26 @@ public class RecordingsActivity extends Activity {
     // ------------------------------------------------------------ Vorschaubilder
 
     private void bindThumb(final ViewHolder h, final ReolinkApi.Recording rec) {
-        h.key = rec.name;
-        Bitmap cached = THUMBS.get(rec.name);
+        final String key = camId + "/" + rec.name;
+        h.key = key;
+        Bitmap cached = THUMBS.get(key);
         if (cached != null) {
             showThumb(h, cached);
             return;
         }
         showThumb(h, null);
-        if (NO_THUMB.contains(rec.name)) return;
+        if (NO_THUMB.contains(key)) return;
         thumbExecutor.execute(new Runnable() {
             @Override public void run() {
-                if (!rec.name.equals(h.key)) return;   // Zeile wurde inzwischen wiederverwendet
-                File f = thumbs.find(rec);
+                if (!key.equals(h.key)) return;   // Zeile wurde inzwischen wiederverwendet
+                File f = thumbs.find(camId, rec);
                 final Bitmap b = f == null ? null : ThumbStore.load(f);
-                if (b != null) THUMBS.put(rec.name, b);
-                else NO_THUMB.add(rec.name);
+                if (b != null) THUMBS.put(key, b);
+                else NO_THUMB.add(key);
                 if (b == null) return;
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        if (rec.name.equals(h.key)) showThumb(h, b);
+                        if (key.equals(h.key)) showThumb(h, b);
                     }
                 });
             }

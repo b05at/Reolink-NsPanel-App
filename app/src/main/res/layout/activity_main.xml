@@ -20,6 +20,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Übersicht mehrerer Kameras -->
+    <at.reolinkpanel.viewer.DashboardView
+        android:id="@+id/dashboard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingLeft="2dp"
+        android:paddingTop="2dp"
+        android:paddingRight="2dp"
+        android:paddingBottom="70dp"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/status"
         android:layout_width="wrap_content"
@@ -41,7 +52,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:layout_margin="14dp"
+        android:layout_marginLeft="12dp"
+        android:layout_marginTop="66dp"
         android:background="@drawable/badge_motion"
         android:fontFamily="sans-serif-medium"
         android:letterSpacing="0.06"
@@ -55,24 +67,76 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <!-- Sirene: runder Knopf oben rechts -->
-    <FrameLayout
+    <!-- Oben links: Übersicht + Kamerawahl -->
+    <LinearLayout
+        android:id="@+id/topLeft"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|top"
+        android:layout_margin="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnGrid"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginRight="6dp"
+            android:background="@drawable/fab_dark"
+            android:contentDescription="Übersicht"
+            android:scaleType="center"
+            android:src="@drawable/ic_grid"
+            android:tint="@color/icon_tint" />
+
+        <TextView
+            android:id="@+id/camChip"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="@drawable/bar_pill"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxWidth="120dp"
+            android:paddingLeft="14dp"
+            android:paddingRight="12dp"
+            android:singleLine="true"
+            android:text="Kamera ▾"
+            android:textColor="@color/text"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- Oben rechts: Scheinwerfer + Sirene -->
+    <LinearLayout
         android:id="@+id/sidePanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end|top"
-        android:layout_margin="10dp">
+        android:layout_margin="10dp"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnLight"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginRight="8dp"
+            android:background="@drawable/fab_dark"
+            android:contentDescription="Scheinwerfer"
+            android:scaleType="center"
+            android:src="@drawable/ic_light"
+            android:tint="@color/text" />
 
         <ImageButton
             android:id="@+id/btnSiren"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
             android:background="@drawable/fab_dark"
             android:contentDescription="Sirene"
             android:scaleType="center"
             android:src="@drawable/ic_siren"
             android:tint="@color/text" />
-    </FrameLayout>
+    </LinearLayout>
 
     <!-- Einblendbares Steuerkreuz -->
     <LinearLayout

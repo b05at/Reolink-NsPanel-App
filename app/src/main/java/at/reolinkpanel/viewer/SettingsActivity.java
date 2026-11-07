@@ -8,37 +8,37 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Einrichtung: Kamera-Zugang, Bewegungserkennung, Verhalten. */
+/** Einrichtung: Kameraliste, Bewegungserkennung, Verhalten. */
 public class SettingsActivity extends Activity {
 
-    private EditText etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath, etWake, etPoll, etSiren, etPtzSpeed;
-    private CheckBox cbHttps, cbFront, cbBoot, cbOpenBoot, cbThumbs;
+    private EditText etWake, etPoll, etSiren, etPtzSpeed, etGridSeconds;
+    private CheckBox cbFront, cbBoot, cbOpenBoot, cbThumbs, cbChime, cbGridLive;
     private RadioGroup rgLive, rgRec, rgTrigger;
-    private TextView tvTest;
+    private LinearLayout camList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        etHost = findViewById(R.id.etHost);
-        etUser = findViewById(R.id.etUser);
-        etPass = findViewById(R.id.etPass);
-        etHttpPort = findViewById(R.id.etHttpPort);
-        etRtspPort = findViewById(R.id.etRtspPort);
-        etRtspPath = findViewById(R.id.etRtspPath);
+        camList = findViewById(R.id.camList);
+        etGridSeconds = findViewById(R.id.etGridSeconds);
+        cbChime = findViewById(R.id.cbChime);
+        cbGridLive = findViewById(R.id.cbGridLive);
         etWake = findViewById(R.id.etWake);
         etPoll = findViewById(R.id.etPoll);
         etSiren = findViewById(R.id.etSiren);
         etPtzSpeed = findViewById(R.id.etPtzSpeed);
-        cbHttps = findViewById(R.id.cbHttps);
         cbFront = findViewById(R.id.cbFront);
         cbBoot = findViewById(R.id.cbBoot);
         cbOpenBoot = findViewById(R.id.cbOpenBoot);
@@ -46,15 +46,16 @@ public class SettingsActivity extends Activity {
         rgLive = findViewById(R.id.rgLive);
         rgRec = findViewById(R.id.rgRec);
         rgTrigger = findViewById(R.id.rgTrigger);
-        tvTest = findViewById(R.id.tvTest);
 
         fill();
 
         findViewById(R.id.btnSave).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { save(); }
         });
-        findViewById(R.id.btnTest).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { test(); }
+        findViewById(R.id.btnAddCam).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, CameraEditActivity.class));
+            }
         });
         findViewById(R.id.btnBackSettings).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { finish(); }
@@ -64,18 +65,47 @@ public class SettingsActivity extends Activity {
         });
     }
 
-    @Override protected void onStart() { super.onStart(); AppState.visible++; }
+    @Override
+    protected void onStart() {
+        super.onStart();
+        AppState.visible++;
+        fillCameras();
+    }
+
+    /** Liste der Kameras – Tippen öffnet die Bearbeitung. */
+    private void fillCameras() {
+        camList.removeAllViews();
+        LayoutInflater inf = LayoutInflater.from(this);
+        java.util.List<Cam> cams = Prefs.cameras(this);
+        for (final Cam c : cams) {
+            View row = inf.inflate(R.layout.item_camera, camList, false);
+            ((TextView) row.findViewById(R.id.tvCamName)).setText(c.displayName());
+            ((TextView) row.findViewById(R.id.tvCamInfo)).setText(
+                    (c.doorbell ? "Türklingel · " : "") + c.host + (c.wake ? "" : " · weckt nicht"));
+            ((android.widget.ImageView) row.findViewById(R.id.ivCamIcon)).setImageResource(
+                    c.doorbell ? R.drawable.ic_doorbell : R.drawable.ic_videocam);
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    startActivity(new Intent(SettingsActivity.this, CameraEditActivity.class)
+                            .putExtra(CameraEditActivity.EXTRA_ID, c.id));
+                }
+            });
+            camList.addView(row);
+        }
+        if (cams.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("Noch keine Kamera eingerichtet.");
+            empty.setTextColor(getColor(R.color.textDim));
+            empty.setPadding(0, 8, 0, 8);
+            camList.addView(empty, new ViewGroup.LayoutParams(-1, -2));
+        }
+    }
     @Override protected void onStop() { AppState.visible--; super.onStop(); }
 
     private void fill() {
-        etHost.setText(Prefs.host(this));
-        etUser.setText(Prefs.user(this));
-        etPass.setText(Prefs.pass(this));
-        cbHttps.setChecked(Prefs.https(this));
-        int hp = Prefs.httpPort(this);
-        etHttpPort.setText(hp > 0 ? String.valueOf(hp) : "");
-        etRtspPort.setText(String.valueOf(Prefs.rtspPort(this)));
-        etRtspPath.setText(Prefs.rtspPath(this));
+        cbChime.setChecked(Prefs.chime(this));
+        cbGridLive.setChecked(Prefs.gridLive(this));
+        etGridSeconds.setText(String.valueOf(Prefs.gridSeconds(this)));
         rgLive.check("main".equals(Prefs.liveStream(this)) ? R.id.rbLiveMain : R.id.rbLiveSub);
         rgRec.check("main".equals(Prefs.recStream(this)) ? R.id.rbRecMain : R.id.rbRecSub);
         String t = Prefs.trigger(this);
@@ -94,11 +124,6 @@ public class SettingsActivity extends Activity {
     }
 
     private void save() {
-        String host = text(etHost);
-        if (host.isEmpty()) {
-            Toast.makeText(this, "Bitte IP-Adresse der Kamera eingeben", Toast.LENGTH_LONG).show();
-            return;
-        }
         String trig;
         int id = rgTrigger.getCheckedRadioButtonId();
         if (id == R.id.rbTrigOff) trig = "off";
@@ -107,13 +132,9 @@ public class SettingsActivity extends Activity {
         else trig = "any";
 
         SharedPreferences.Editor e = Prefs.sp(this).edit();
-        e.putString("host", host);
-        e.putString("user", text(etUser));
-        e.putString("pass", etPass.getText().toString());
-        e.putBoolean("https", cbHttps.isChecked());
-        e.putInt("httpPort", num(etHttpPort, 0));
-        e.putInt("rtspPort", num(etRtspPort, 554));
-        e.putString("rtspPath", text(etRtspPath));
+        e.putBoolean("chime", cbChime.isChecked());
+        e.putBoolean("gridLive", cbGridLive.isChecked());
+        e.putInt("gridSeconds", Math.min(60, Math.max(1, num(etGridSeconds, 2))));
         e.putString("liveStream", rgLive.getCheckedRadioButtonId() == R.id.rbLiveMain ? "main" : "sub");
         e.putString("recStream", rgRec.getCheckedRadioButtonId() == R.id.rbRecMain ? "main" : "sub");
         e.putString("trigger", trig);
@@ -130,36 +151,6 @@ public class SettingsActivity extends Activity {
         MotionService.reload(this);
         Toast.makeText(this, "Gespeichert", Toast.LENGTH_SHORT).show();
         finish();
-    }
-
-    private void test() {
-        final ReolinkApi api = new ReolinkApi(text(etHost), text(etUser), etPass.getText().toString(),
-                cbHttps.isChecked(), num(etHttpPort, 0), num(etRtspPort, 554), text(etRtspPath));
-        tvTest.setTextColor(getColor(R.color.textDim));
-        tvTest.setText("Teste Verbindung…");
-        new Thread(new Runnable() {
-            @Override public void run() {
-                String msg;
-                boolean ok;
-                try {
-                    api.login();
-                    msg = "✓ Verbunden: " + api.deviceName();
-                    ok = true;
-                } catch (Exception ex) {
-                    msg = "⚠ Fehlgeschlagen: " + ex.getMessage()
-                            + "\nTipp: HTTPS/HTTP-Einstellung und Port prüfen.";
-                    ok = false;
-                }
-                final String m = msg;
-                final boolean good = ok;
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        tvTest.setTextColor(getColor(good ? R.color.accent : R.color.warn));
-                        tvTest.setText(m);
-                    }
-                });
-            }
-        }).start();
     }
 
     private void batteryOptimization() {
@@ -179,8 +170,6 @@ public class SettingsActivity extends Activity {
             }
         }
     }
-
-    private static String text(EditText e) { return e.getText().toString().trim(); }
 
     private static int num(EditText e, int def) {
         try {
