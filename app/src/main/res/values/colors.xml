@@ -1,0 +1,14 @@
+<resources>
+    <!-- Farbschema ohne Rot/Grün: Blau = OK/aktiv, Gelb = Bewegung/Hinweis -->
+    <color name="bg">#0E1116</color>
+    <color name="surface">#1B2129</color>
+    <color name="surface_pressed">#2C3644</color>
+    <color name="bar">#D90E1116</color>
+    <color name="text">#F2F4F7</color>
+    <color name="textDim">#9AA4B2</color>
+    <color name="accent">#4FA3F7</color>
+    <color name="motion">#FFC93C</color>
+    <color name="warn">#FFC93C</color>
+    <color name="scrim">#CC000000</color>
+    <color name="launcher_bg">#1B2129</color>
+</resources>

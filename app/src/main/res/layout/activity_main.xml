@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:resize_mode="fit"
+        app:show_buffering="never"
+        app:shutter_background_color="@color/bg" />
+
+    <!-- Fängt Berührungen ab: Tippen zeigt/versteckt die Bedienleiste -->
+    <View
+        android:id="@+id/touch"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="16dp"
+        android:background="@drawable/pill"
+        android:gravity="center"
+        android:paddingLeft="14dp"
+        android:paddingTop="8dp"
+        android:paddingRight="14dp"
+        android:paddingBottom="8dp"
+        android:text="Verbinde…"
+        android:textColor="@color/text"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/motionBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:background="@drawable/badge_motion"
+        android:paddingLeft="10dp"
+        android:paddingTop="4dp"
+        android:paddingRight="10dp"
+        android:paddingBottom="4dp"
+        android:text="BEWEGUNG"
+        android:textColor="#000000"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextClock
+        android:id="@+id/clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:format12Hour="HH:mm"
+        android:format24Hour="HH:mm"
+        android:shadowColor="#000000"
+        android:shadowRadius="4"
+        android:textColor="@color/text"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <!-- Sirene: rechts über der Bedienleiste, bei aktiver Sirene immer sichtbar -->
+    <Button
+        android:id="@+id/btnSiren"
+        style="@style/BarButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginBottom="62dp"
+        android:layout_marginRight="8dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:text="Sirene"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@color/bar"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <Button
+            android:id="@+id/btnRec"
+            style="@style/BarButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.6"
+            android:text="Aufnahmen" />
+
+        <Button
+            android:id="@+id/btnSound"
+            style="@style/BarButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.2"
+            android:text="Ton aus" />
+
+        <Button
+            android:id="@+id/btnStream"
+            style="@style/BarButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.8"
+            android:text="SD" />
+
+        <Button
+            android:id="@+id/btnZoom"
+            style="@style/BarButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.1"
+            android:text="Ganz" />
+
+        <Button
+            android:id="@+id/btnSettings"
+            style="@style/BarButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.7"
+            android:text="⚙"
+            android:textSize="18sp" />
+    </LinearLayout>
+</FrameLayout>
