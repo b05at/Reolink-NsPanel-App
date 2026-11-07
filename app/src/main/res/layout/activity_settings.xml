@@ -55,7 +55,7 @@
         <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Livebild" />
         <RadioGroup android:id="@+id/rgLive" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
             <RadioButton android:id="@+id/rbLiveSub" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SD – Substream (empfohlen, flüssig)" />
-            <RadioButton android:id="@+id/rbLiveMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – Hauptstream 4K (kann ruckeln)" />
+            <RadioButton android:id="@+id/rbLiveMain" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HD – höhere Auflösung (fällt automatisch auf SD zurück, falls nicht abspielbar)" />
         </RadioGroup>
 
         <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aufnahmen abspielen in" />
@@ -90,6 +90,11 @@
         <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sirene" />
         <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Automatisch abschalten nach (Sek.)" />
         <EditText android:id="@+id/etSiren" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="30" android:inputType="number" />
+
+        <!-- Schwenken -->
+        <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Schwenken / Zoom" />
+        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Geschwindigkeit (1–64)" />
+        <EditText android:id="@+id/etPtzSpeed" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="32" android:inputType="number" />
 
         <!-- Start -->
         <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Gerätestart" />

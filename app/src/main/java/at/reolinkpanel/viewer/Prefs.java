@@ -38,7 +38,10 @@ public final class Prefs {
     /** Sirene schaltet sich spätestens nach dieser Zeit selbst ab. */
     public static int sirenSeconds(Context c)   { return sp(c).getInt("sirenSeconds", 30); }
 
-    public static boolean muted(Context c)    { return sp(c).getBoolean("muted", true); }
+    /** Schwenk-Geschwindigkeit 1–64. */
+    public static int ptzSpeed(Context c)       { return sp(c).getInt("ptzSpeed", 32); }
+
+    public static boolean muted(Context c)  { return sp(c).getBoolean("muted", true); }
     public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }
 
     public static boolean isConfigured(Context c) {

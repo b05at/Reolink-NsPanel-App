@@ -18,7 +18,7 @@ import android.widget.Toast;
 /** Einrichtung: Kamera-Zugang, Bewegungserkennung, Verhalten. */
 public class SettingsActivity extends Activity {
 
-    private EditText etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath, etWake, etPoll, etSiren;
+    private EditText etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath, etWake, etPoll, etSiren, etPtzSpeed;
     private CheckBox cbHttps, cbFront, cbBoot, cbOpenBoot;
     private RadioGroup rgLive, rgRec, rgTrigger;
     private TextView tvTest;
@@ -37,6 +37,7 @@ public class SettingsActivity extends Activity {
         etWake = findViewById(R.id.etWake);
         etPoll = findViewById(R.id.etPoll);
         etSiren = findViewById(R.id.etSiren);
+        etPtzSpeed = findViewById(R.id.etPtzSpeed);
         cbHttps = findViewById(R.id.cbHttps);
         cbFront = findViewById(R.id.cbFront);
         cbBoot = findViewById(R.id.cbBoot);
@@ -81,6 +82,7 @@ public class SettingsActivity extends Activity {
         etWake.setText(String.valueOf(Prefs.wakeSeconds(this)));
         etPoll.setText(String.valueOf(Prefs.pollMs(this)));
         etSiren.setText(String.valueOf(Prefs.sirenSeconds(this)));
+        etPtzSpeed.setText(String.valueOf(Prefs.ptzSpeed(this)));
         cbFront.setChecked(Prefs.bringToFront(this));
         cbBoot.setChecked(Prefs.startOnBoot(this));
         cbOpenBoot.setChecked(Prefs.openOnBoot(this));
@@ -112,6 +114,7 @@ public class SettingsActivity extends Activity {
         e.putString("trigger", trig);
         e.putInt("wakeSeconds", Math.max(5, num(etWake, 60)));
         e.putInt("pollMs", Math.max(300, num(etPoll, 1000)));
+        e.putInt("ptzSpeed", Math.min(64, Math.max(1, num(etPtzSpeed, 32))));
         e.putInt("sirenSeconds", Math.min(300, Math.max(5, num(etSiren, 30))));
         e.putBoolean("bringToFront", cbFront.isChecked());
         e.putBoolean("startOnBoot", cbBoot.isChecked());

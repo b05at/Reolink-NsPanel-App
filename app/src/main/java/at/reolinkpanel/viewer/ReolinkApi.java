@@ -222,6 +222,21 @@ public class ReolinkApi {
         return o != null && o.optInt("alarm_state", 0) == 1;
     }
 
+    // ---------------------------------------------------------------- PTZ
+
+    /** op: Left, Right, Up, Down, ZoomInc, ZoomDec, Stop. speed 1–64. */
+    public void ptz(String op, int speed) throws IOException, ApiException {
+        try {
+            JSONObject p = new JSONObject();
+            p.put("channel", 0);
+            p.put("op", op);
+            if (!"Stop".equals(op)) p.put("speed", Math.max(1, Math.min(64, speed)));
+            call("PtzCtrl", p);
+        } catch (JSONException e) {
+            throw new IOException(e.getMessage());
+        }
+    }
+
     // ---------------------------------------------------------------- Sirene
 
     /** Sirene ein (Dauerton bis zum Ausschalten) oder aus. */

@@ -1,5 +1,6 @@
 package at.reolinkpanel.viewer;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -8,15 +9,18 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.Tracks;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.rtsp.RtspMediaSource;
@@ -24,6 +28,9 @@ import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,17 +38,28 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity implements MotionService.Listener {
 
     private static final long CONTROLS_TIMEOUT_MS = 8000;
+    /** So lange darf es bis zum ersten Bild dauern, sonst gilt der Stream als nicht abspielbar. */
+    private static final long FIRST_FRAME_TIMEOUT_MS = 15000;
 
     private PlayerView playerView;
     private ExoPlayer player;
-    private View controls;
+    private View controls, sidePanel, ptzPanel;
     private TextView statusText, motionBadge;
-    private Button btnSound, btnStream, btnZoom, btnSiren;
+    private Button btnSound, btnStream, btnZoom, btnSiren, btnPtz;
+    private DPadView dpad;
 
+    // --- Stream-Auswahl mit automatischem Rückfall
+    private final List<String> candidates = new ArrayList<>();
+    private int candIdx;
+    private boolean gotFrame;
+
+    // --- Kamera-Befehle (Sirene, PTZ) – nacheinander im Hintergrund
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private ReolinkApi sirenApi;
+    private ReolinkApi camApi;
     private boolean sirenOn = false;
     private boolean sirenBusy = false;
+    private boolean ptzMoving = false;
+    private boolean ptzErrorShown = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable sirenAutoOff = new Runnable() {
@@ -51,7 +69,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
         @Override public void run() { setControls(false); }
     };
     private final Runnable retry = new Runnable() {
-        @Override public void run() { startLive(); }
+        @Override public void run() { playCandidate(); }
+    };
+    private final Runnable firstFrameTimeout = new Runnable() {
+        @Override public void run() { streamFailed("Kein Bild"); }
     };
     private final Runnable stallCheck = new Runnable() {
         @Override public void run() { scheduleRetry("Bild hängt – verbinde neu…"); }
@@ -69,19 +90,16 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
         playerView = findViewById(R.id.player);
         controls = findViewById(R.id.controls);
+        sidePanel = findViewById(R.id.sidePanel);
+        ptzPanel = findViewById(R.id.ptzPanel);
         statusText = findViewById(R.id.status);
         motionBadge = findViewById(R.id.motionBadge);
         btnSound = findViewById(R.id.btnSound);
         btnStream = findViewById(R.id.btnStream);
         btnZoom = findViewById(R.id.btnZoom);
         btnSiren = findViewById(R.id.btnSiren);
-
-        btnSiren.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (sirenOn) setSiren(false);   // Ausschalten sofort, ohne Rückfrage
-                else confirmSiren();
-            }
-        });
+        btnPtz = findViewById(R.id.btnPtz);
+        dpad = findViewById(R.id.dpad);
 
         findViewById(R.id.touch).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { toggleControls(); }
@@ -109,10 +127,6 @@ public class MainActivity extends Activity implements MotionService.Listener {
             @Override public void onClick(View v) {
                 String next = "sub".equals(Prefs.liveStream(MainActivity.this)) ? "main" : "sub";
                 Prefs.sp(MainActivity.this).edit().putString("liveStream", next).apply();
-                if ("main".equals(next)) {
-                    Toast.makeText(MainActivity.this,
-                            "Hauptstream (4K) kann auf dem Panel ruckeln", Toast.LENGTH_LONG).show();
-                }
                 updateButtons();
                 startLive();
                 showControls();
@@ -126,8 +140,26 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 showControls();
             }
         });
+        btnSiren.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (sirenOn) setSiren(false);   // Ausschalten sofort, ohne Rückfrage
+                else confirmSiren();
+            }
+        });
+        btnPtz.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { setPtzVisible(ptzPanel.getVisibility() != View.VISIBLE); }
+        });
+        findViewById(R.id.btnPtzClose).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { setPtzVisible(false); }
+        });
+        dpad.setListener(new DPadView.Listener() {
+            @Override public void onDirection(String op) { ptz(op); }
+        });
+        holdButton(findViewById(R.id.btnZoomIn), "ZoomInc");
+        holdButton(findViewById(R.id.btnZoomOut), "ZoomDec");
 
         updateButtons();
+        updateSiren();
 
         if (!Prefs.isConfigured(this)) {
             startActivity(new Intent(this, SettingsActivity.class));
@@ -151,6 +183,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         super.onStart();
         AppState.visible++;
         AppState.liveVisible = true;
+        camApi = null;   // Einstellungen könnten sich geändert haben
         MotionService.setListener(this);
         applyMotion(MotionService.motionActive);
         startLive();
@@ -168,6 +201,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         AppState.liveVisible = false;
         MotionService.clearListener(this);
         if (sirenOn) setSiren(false);   // Sirene nie unbeaufsichtigt weiterlaufen lassen
+        setPtzVisible(false);           // stoppt auch laufende Schwenks
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
         super.onStop();
@@ -175,7 +209,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     @Override
     protected void onDestroy() {
-        executor.shutdown();   // laufende Befehle (z. B. Sirene aus) noch abschließen
+        executor.shutdown();   // laufende Befehle (z. B. Stopp) noch abschließen
         super.onDestroy();
     }
 
@@ -187,8 +221,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     @Override
     public void onBackPressed() {
-        // Am Panel nicht versehentlich beenden – nur Bedienleiste zeigen.
-        showControls();
+        // Am Panel nicht versehentlich beenden.
+        if (ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
+        else showControls();
     }
 
     // ------------------------------------------------------------ Bewegung
@@ -202,22 +237,48 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void applyMotion(boolean active) {
         motionBadge.setVisibility(active ? View.VISIBLE : View.GONE);
-        if (active) {
+        updateKeepOn();
+    }
+
+    private void updateKeepOn() {
+        if (MotionService.motionActive || sirenOn) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        } else if (!sirenOn) {
+        } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
     }
 
     // ------------------------------------------------------------ Livebild
 
+    /**
+     * SD = Substream. HD versucht zuerst den mittleren Stream (ext, max. ~1080p),
+     * dann den Hauptstream. Kann das Panel nichts davon abspielen (4K/H.265 übersteigt
+     * den Decoder), fällt die App automatisch auf SD zurück.
+     */
     private void startLive() {
+        candidates.clear();
+        if (!Prefs.rtspPath(this).isEmpty() || "sub".equals(Prefs.liveStream(this))) {
+            candidates.add("sub");
+        } else {
+            candidates.addAll(Arrays.asList("ext", "main", "sub"));
+        }
+        candIdx = 0;
+        playCandidate();
+    }
+
+    private boolean isHdAttempt() {
+        return !"sub".equals(candidates.get(candIdx));
+    }
+
+    private void playCandidate() {
         stopLive();
         if (!Prefs.isConfigured(this)) {
             showStatus("Bitte zuerst die Kamera einrichten (⚙)");
             return;
         }
-        showStatus("Verbinde…");
+        final String stream = candidates.get(candIdx);
+        gotFrame = false;
+        showStatus(isHdAttempt() ? "Verbinde (HD)…" : "Verbinde…");
 
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(1000, 3000, 250, 500)   // geringe Verzögerung
@@ -227,7 +288,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         playerView.setPlayer(player);
         applyZoom();
 
-        String url = ReolinkApi.from(this).rtspUrl(Prefs.liveStream(this));
+        String url = ReolinkApi.from(this).rtspUrl(stream);
         MediaSource source = new RtspMediaSource.Factory()
                 .setForceUseRtpTcp(true)
                 .setTimeoutMs(8000)
@@ -235,11 +296,26 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
         player.addListener(new Player.Listener() {
             @Override
+            public void onRenderedFirstFrame() {
+                gotFrame = true;
+                handler.removeCallbacks(firstFrameTimeout);
+                handler.removeCallbacks(stallCheck);
+                hideStatus();
+            }
+
+            @Override
+            public void onTracksChanged(Tracks tracks) {
+                // Video vorhanden, aber vom Panel nicht dekodierbar (z. B. 4K H.265)
+                if (tracks.containsType(C.TRACK_TYPE_VIDEO) && !tracks.isTypeSupported(C.TRACK_TYPE_VIDEO, false)) {
+                    streamFailed("Format nicht unterstützt");
+                }
+            }
+
+            @Override
             public void onPlaybackStateChanged(int state) {
                 if (state == Player.STATE_READY) {
                     handler.removeCallbacks(stallCheck);
-                    hideStatus();
-                } else if (state == Player.STATE_BUFFERING) {
+                } else if (state == Player.STATE_BUFFERING && gotFrame) {
                     handler.removeCallbacks(stallCheck);
                     handler.postDelayed(stallCheck, 12000);
                 } else if (state == Player.STATE_ENDED) {
@@ -249,17 +325,39 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                scheduleRetry("Keine Verbindung zur Kamera – neuer Versuch…");
+                streamFailed(error.getErrorCodeName());
             }
         });
         player.setMediaSource(source);
         player.prepare();
         player.setPlayWhenReady(true);
+        handler.postDelayed(firstFrameTimeout, FIRST_FRAME_TIMEOUT_MS);
+    }
+
+    /** Stream ließ sich nicht abspielen: nächste Variante probieren oder neu verbinden. */
+    private void streamFailed(String reason) {
+        if (player == null) return;
+        handler.removeCallbacks(firstFrameTimeout);
+        if (!gotFrame && isHdAttempt() && candIdx < candidates.size() - 1) {
+            candIdx++;
+            if (!isHdAttempt()) {
+                // Alle HD-Varianten gescheitert -> dauerhaft auf SD zurück
+                Prefs.sp(this).edit().putString("liveStream", "sub").apply();
+                updateButtons();
+                Toast.makeText(this, "HD kann am Panel nicht abgespielt werden – zurück auf SD.\n"
+                        + "Tipp: In der Reolink-App den Hauptstream auf H.264 bzw. max. 1080p stellen.",
+                        Toast.LENGTH_LONG).show();
+            }
+            playCandidate();
+            return;
+        }
+        scheduleRetry("Keine Verbindung zur Kamera – neuer Versuch…");
     }
 
     private void stopLive() {
         handler.removeCallbacks(retry);
         handler.removeCallbacks(stallCheck);
+        handler.removeCallbacks(firstFrameTimeout);
         if (player != null) {
             player.release();
             player = null;
@@ -270,6 +368,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void scheduleRetry(String msg) {
         showStatus(msg);
         handler.removeCallbacks(stallCheck);
+        handler.removeCallbacks(firstFrameTimeout);
         handler.removeCallbacks(retry);
         handler.postDelayed(retry, 3000);
     }
@@ -278,6 +377,80 @@ public class MainActivity extends Activity implements MotionService.Listener {
         playerView.setResizeMode(Prefs.zoom(this)
                 ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 : AspectRatioFrameLayout.RESIZE_MODE_FIT);
+    }
+
+    // ------------------------------------------------------------ Kamera-Befehle
+
+    private ReolinkApi api() {
+        if (camApi == null) camApi = ReolinkApi.from(this);
+        return camApi;
+    }
+
+    // ------------------------------------------------------------ PTZ
+
+    private void setPtzVisible(boolean show) {
+        if (!show) {
+            dpad.reset();
+            if (ptzMoving) ptz(null);
+        }
+        ptzPanel.setVisibility(show ? View.VISIBLE : View.GONE);
+        btnPtz.setActivated(show);
+        if (show) {
+            setControls(true);
+            handler.removeCallbacks(hideControls);   // Bedienung bleibt offen, solange PTZ aktiv
+        } else if (controls.getVisibility() == View.VISIBLE) {
+            showControls();
+        }
+    }
+
+    /** op == null -> Stopp. */
+    private void ptz(String op) {
+        final String cmd = op == null ? "Stop" : op;
+        ptzMoving = op != null;
+        final ReolinkApi a = api();
+        final int speed = Prefs.ptzSpeed(this);
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    a.ptz(cmd, speed);
+                } catch (final Exception e) {
+                    if ("Stop".equals(cmd)) {
+                        try { a.ptz("Stop", speed); } catch (Exception ignored) {}   // zweiter Versuch
+                    }
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            if (!ptzErrorShown && !isDestroyed()) {
+                                ptzErrorShown = true;
+                                Toast.makeText(MainActivity.this, "Steuerung: " + e.getMessage(),
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    /** Knopf, der einen Befehl sendet, solange er gedrückt ist (Zoom). */
+    @SuppressLint("ClickableViewAccessibility")
+    private void holdButton(View b, final String op) {
+        b.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        ptz(op);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        ptz(null);
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
     }
 
     // ------------------------------------------------------------ Sirene
@@ -306,8 +479,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         if (sirenBusy && on) return;
         sirenBusy = true;
         handler.removeCallbacks(sirenAutoOff);
-        if (sirenApi == null) sirenApi = ReolinkApi.from(this);
-        final ReolinkApi api = sirenApi;
+        final ReolinkApi a = api();
         if (!on) {
             // UI sofort zurücksetzen, Befehl läuft im Hintergrund
             sirenOn = false;
@@ -317,7 +489,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             @Override public void run() {
                 Exception err = null;
                 try {
-                    api.siren(on);
+                    a.siren(on);
                 } catch (Exception e) {
                     err = e;
                 }
@@ -335,7 +507,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
                         if (on) {
                             sirenOn = true;
                             updateSiren();
-                            handler.postDelayed(sirenAutoOff, Math.max(5, Prefs.sirenSeconds(MainActivity.this)) * 1000L);
+                            handler.postDelayed(sirenAutoOff,
+                                    Math.max(5, Prefs.sirenSeconds(MainActivity.this)) * 1000L);
                         }
                     }
                 });
@@ -345,28 +518,25 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateSiren() {
         if (sirenOn) {
-            btnSiren.setText("Sirene AUS");
+            btnSiren.setText("Sirene\nAUS");
             btnSiren.setBackgroundResource(R.drawable.btn_siren_active);
             btnSiren.setTextColor(0xFF000000);
-            btnSiren.setVisibility(View.VISIBLE);
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             btnSiren.setText("Sirene");
             btnSiren.setBackgroundResource(R.drawable.btn_bg);
             btnSiren.setTextColor(getColor(R.color.text));
-            btnSiren.setVisibility(controls.getVisibility());
-            if (!MotionService.motionActive) {
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            }
         }
+        setControls(controls.getVisibility() == View.VISIBLE);
+        updateKeepOn();
     }
 
     // ------------------------------------------------------------ UI
 
-    /** Bedienleiste und Sirenen-Knopf ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
+    /** Bedienleiste + Seitenknöpfe ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
     private void setControls(boolean show) {
         controls.setVisibility(show ? View.VISIBLE : View.GONE);
-        btnSiren.setVisibility(show || sirenOn ? View.VISIBLE : View.GONE);
+        sidePanel.setVisibility(show || sirenOn ? View.VISIBLE : View.GONE);
+        if (!show && ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
     }
 
     private void showStatus(String s) {
@@ -388,7 +558,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void showControls() {
         setControls(true);
         handler.removeCallbacks(hideControls);
-        handler.postDelayed(hideControls, CONTROLS_TIMEOUT_MS);
+        if (ptzPanel.getVisibility() != View.VISIBLE) {
+            handler.postDelayed(hideControls, CONTROLS_TIMEOUT_MS);
+        }
     }
 
     private void updateButtons() {

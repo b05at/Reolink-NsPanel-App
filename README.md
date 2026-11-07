@@ -5,6 +5,7 @@ Schlanke Android-App (ab Android 8.0) für die **Reolink E1 Outdoor Pro**, ohne 
 - **Livebild** per RTSP (SD-Substream als Standard, HD/4K umschaltbar), Ton optional
 - **Aufnahmen** von der SD-Karte nach Tag durchblättern und abspielen (mit Suchleiste)
 - **Bewegungserkennung**: Bei Bewegung (wahlweise nur Personen bzw. Personen + Fahrzeuge) schaltet sich das Display ein und das Livebild erscheint
+- **Schwenken/Neigen/Zoom** über ein einblendbares Steuerkreuz
 - **Sirene** der Kamera per Knopf auslösen (mit Sicherheitsabfrage, schaltet sich automatisch ab)
 - Startet nach einem Neustart des Panels automatisch
 - Für 480×480 optimiert, dunkles Design, Farben ohne Rot/Grün (Blau = OK, Gelb = Bewegung)
@@ -54,7 +55,8 @@ Beim ersten Start öffnen sich die Einstellungen:
 ## Bedienung
 
 - **Tippen aufs Bild** blendet die Bedienleiste ein: Aufnahmen · Ton · SD/HD · Ganz/Füllen · ⚙
-- **Sirene** (rechts über der Leiste): Nach Bestätigung ertönt die Sirene. Solange sie läuft, ist der Knopf gelb und dauerhaft sichtbar, ein Tippen schaltet sie sofort ab. Spätestens nach der eingestellten Zeit (Standard 30 s) oder beim Verlassen des Livebilds geht sie automatisch aus.
+- **Schwenken** (rechts oben): blendet das Steuerkreuz ein. Gedrückt halten = Kamera bewegt sich, loslassen = Stopp. Mit + / − zoomen.
+- **Sirene** (rechts oben): Nach Bestätigung ertönt die Sirene. Solange sie läuft, ist der Knopf gelb und dauerhaft sichtbar, ein Tippen schaltet sie sofort ab. Spätestens nach der eingestellten Zeit (Standard 30 s) oder beim Verlassen des Livebilds geht sie automatisch aus.
 - **Ganz/Füllen**: „Füllen“ schneidet das 16:9-Bild seitlich ab, sodass das quadratische Display voll ausgefüllt ist.
 - Die Aufnahmen werden vor dem Abspielen kurz geladen. Mit SD geht das schnell.
 
@@ -62,6 +64,6 @@ Beim ersten Start öffnen sich die Einstellungen:
 
 - **Display aus:** Nach Ende der Bewegung und Ablauf der Anzeigedauer geht das Display gemäß dem System-Bildschirm-Timeout des Panels aus.
 - **Reaktionszeit:** Die Kamera wird standardmäßig jede Sekunde abgefragt, das Display schaltet also ca. 1–2 s nach der Bewegung ein.
-- **HD/4K:** Der schwache Prozessor des Panels schafft 4K-H.265 meist nicht flüssig. Darum ist SD voreingestellt.
+- **HD:** Das Panel kann 4K-H.265 nicht dekodieren. HD probiert zuerst den mittleren Stream und dann den Hauptstream. Klappt beides nicht, schaltet die App automatisch auf SD zurück. Abhilfe: in der Reolink-App den Hauptstream ("Klar") auf eine niedrigere Auflösung bzw. H.264 stellen.
 - **Sicherheit:** Die App verbindet sich nur im lokalen Netz. Das selbstsignierte HTTPS-Zertifikat der Kamera wird akzeptiert.
 - **Gegensprechen** ist nicht enthalten. Reolink nutzt dafür ein proprietäres Protokoll.

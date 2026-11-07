@@ -14,7 +14,7 @@
         app:show_buffering="never"
         app:shutter_background_color="@color/bg" />
 
-    <!-- Fängt Berührungen ab: Tippen zeigt/versteckt die Bedienleiste -->
+    <!-- Fängt Berührungen ab: Tippen zeigt/versteckt die Bedienung -->
     <View
         android:id="@+id/touch"
         android:layout_width="match_parent"
@@ -53,33 +53,83 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <TextClock
-        android:id="@+id/clock"
+    <!-- Rechte Seite: Schwenken und Sirene -->
+    <LinearLayout
+        android:id="@+id/sidePanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="8dp"
-        android:format12Hour="HH:mm"
-        android:format24Hour="HH:mm"
-        android:shadowColor="#000000"
-        android:shadowRadius="4"
-        android:textColor="@color/text"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:layout_gravity="end|top"
+        android:layout_marginTop="6dp"
+        android:layout_marginRight="4dp"
+        android:orientation="vertical">
 
-    <!-- Sirene: rechts über der Bedienleiste, bei aktiver Sirene immer sichtbar -->
-    <Button
-        android:id="@+id/btnSiren"
-        style="@style/BarButton"
+        <Button
+            android:id="@+id/btnPtz"
+            style="@style/BarButton"
+            android:layout_width="84dp"
+            android:layout_height="52dp"
+            android:text="Schwenken"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnSiren"
+            style="@style/BarButton"
+            android:layout_width="84dp"
+            android:layout_height="52dp"
+            android:singleLine="false"
+            android:maxLines="2"
+            android:text="Sirene"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Einblendbares Steuerkreuz -->
+    <LinearLayout
+        android:id="@+id/ptzPanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginBottom="62dp"
-        android:layout_marginRight="8dp"
-        android:paddingLeft="16dp"
-        android:paddingRight="16dp"
-        android:text="Sirene"
-        android:textStyle="bold" />
+        android:layout_gravity="start|bottom"
+        android:layout_marginLeft="8dp"
+        android:layout_marginBottom="66dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <at.reolinkpanel.viewer.DPadView
+            android:id="@+id/dpad"
+            android:layout_width="150dp"
+            android:layout_height="150dp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:orientation="vertical">
+
+            <Button
+                android:id="@+id/btnZoomIn"
+                style="@style/BarButton"
+                android:layout_width="52dp"
+                android:layout_height="46dp"
+                android:text="+"
+                android:textSize="22sp" />
+
+            <Button
+                android:id="@+id/btnZoomOut"
+                style="@style/BarButton"
+                android:layout_width="52dp"
+                android:layout_height="46dp"
+                android:text="−"
+                android:textSize="22sp" />
+
+            <Button
+                android:id="@+id/btnPtzClose"
+                style="@style/BarButton"
+                android:layout_width="52dp"
+                android:layout_height="46dp"
+                android:text="✕"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/controls"
