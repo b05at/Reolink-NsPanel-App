@@ -249,4 +249,12 @@
             android:contentDescription="Einstellungen"
             android:src="@drawable/ic_settings" />
     </LinearLayout>
+
+    <!-- Ruhemodus: schwarz, Berührung weckt das Display -->
+    <View
+        android:id="@+id/sleepOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:visibility="gone" />
 </FrameLayout>

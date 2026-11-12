@@ -3,6 +3,8 @@ package at.reolinkpanel.viewer;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -10,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -45,7 +48,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private PlayerView playerView;
     private ExoPlayer player;
     private DashboardView dashboard;
-    private View controls, sidePanel, topLeft, ptzPanel;
+    private View controls, sidePanel, topLeft, ptzPanel, sleepOverlay;
     private TextView statusText, motionBadge, camChip;
     private ImageButton btnSound, btnZoom, btnSiren, btnPtz, btnLight, btnGrid, btnRec;
     private TextView btnStream;
@@ -74,7 +77,15 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private boolean ptzMoving = false;
     private boolean ptzErrorShown = false;
 
+    // --- Bildschirm-Timeout / Ruhemodus
+    private boolean sleeping;          // Ruhemodus aktiv (schwarz, Tipp weckt)
+    private boolean screenReleased;    // Display darf vom System ausgeschaltet werden
+    private boolean swallowTouch;      // Berührung, die geweckt hat, nicht weiterreichen
+
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable sleepRunnable = new Runnable() {
+        @Override public void run() { goToSleep(); }
+    };
     private final Runnable sirenAutoOff = new Runnable() {
         @Override public void run() { setSiren(false); }
     };
@@ -107,6 +118,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         sidePanel = findViewById(R.id.sidePanel);
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
+        sleepOverlay = findViewById(R.id.sleepOverlay);
         statusText = findViewById(R.id.status);
         motionBadge = findViewById(R.id.motionBadge);
         camChip = findViewById(R.id.camChip);
@@ -214,7 +226,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (started && handleEventIntent(intent)) applyMode();
+        if (started && handleEventIntent(intent)) {
+            if (sleeping) leaveSleepUi();
+            applyMode();
+            resetSleepTimer();
+        }
     }
 
     @Override
@@ -232,6 +248,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         applyMode();
         applyMotion(MotionService.motionActive, MotionService.activeCamId, MotionService.activeRing);
         if (event) setControls(false); else showControls();
+        resetSleepTimer();
     }
 
     @Override
@@ -245,6 +262,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
         dashboard.stop();
+        leaveSleepUi();
+        screenReleased = false;
         if (returnToGrid) {
             returnToGrid = false;
             Prefs.setViewMode(this, "grid");
@@ -392,9 +411,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 if (active && ring && camId != null && (gridMode || cam == null || !camId.equals(cam.id))) {
                     switchToCam(camId, false);
                 }
+                if (active && sleeping) wakeUp();
                 applyMotion(active, camId, ring);
                 // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
                 if (!active && returnToGrid) showGrid();
+                resetSleepTimer();
             }
         });
     }
@@ -414,7 +435,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
     }
 
     private void updateKeepOn() {
-        if (MotionService.motionActive || sirenOn) {
+        boolean managed = effectiveTimeoutMs() != -1 && !screenReleased;
+        if (managed || sleeping || MotionService.motionActive || sirenOn) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -754,6 +776,103 @@ public class MainActivity extends Activity implements MotionService.Listener {
         }
         setControls(controls.getVisibility() == View.VISIBLE);
         updateKeepOn();
+    }
+
+    // ------------------------------------------------------------ Bildschirm-Timeout
+
+    /** -1 = System regelt das Ausschalten, 0 = nie, sonst Millisekunden. */
+    private int effectiveTimeoutMs() {
+        int t = Prefs.screenTimeout(this);
+        if (t == 0) return 0;
+        if (t > 0) return t * 1000;
+        if (!Prefs.tapToWake(this)) return -1;
+        // Ruhemodus mit System-Standard: Systemwert übernehmen
+        try {
+            return Math.max(10000, Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT));
+        } catch (Exception e) {
+            return 60000;
+        }
+    }
+
+    private void resetSleepTimer() {
+        handler.removeCallbacks(sleepRunnable);
+        if (!started) return;
+        int ms = effectiveTimeoutMs();
+        if (ms > 0 && !sleeping) handler.postDelayed(sleepRunnable, ms);
+        updateKeepOn();
+    }
+
+    private void goToSleep() {
+        if (!started || sleeping) return;
+        // Nicht während Bewegung, Sirene oder Schwenken
+        if (MotionService.motionActive || sirenOn || ptzPanel.getVisibility() == View.VISIBLE) {
+            resetSleepTimer();
+            return;
+        }
+        if (Prefs.tapToWake(this)) {
+            // Ruhemodus: Bild schwarz, Helligkeit minimal, Stream aus – Display bleibt berührbar
+            sleeping = true;
+            stopLive();
+            dashboard.stop();
+            hideStatus();
+            sleepOverlay.setVisibility(View.VISIBLE);
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF;
+            getWindow().setAttributes(lp);
+            updateKeepOn();
+        } else {
+            // Echtes Ausschalten: mit Geräteadministrator sofort, sonst über das System-Timeout
+            screenReleased = true;
+            updateKeepOn();
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+            ComponentName admin = new ComponentName(this, AdminReceiver.class);
+            if (dpm != null && dpm.isAdminActive(admin)) {
+                try { dpm.lockNow(); } catch (SecurityException ignored) {}
+            }
+        }
+    }
+
+    private void wakeUp() {
+        boolean wasSleeping = sleeping;
+        leaveSleepUi();
+        screenReleased = false;
+        if (wasSleeping) applyMode();
+        showControls();
+        resetSleepTimer();
+    }
+
+    private void leaveSleepUi() {
+        sleeping = false;
+        sleepOverlay.setVisibility(View.GONE);
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        if (lp.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+            getWindow().setAttributes(lp);
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (sleeping) {
+                swallowTouch = true;   // diese Berührung weckt nur, löst nichts aus
+                wakeUp();
+                return true;
+            }
+            swallowTouch = false;
+            if (screenReleased) {
+                screenReleased = false;
+                updateKeepOn();
+            }
+            resetSleepTimer();
+        }
+        if (swallowTouch) {
+            if (ev.getActionMasked() == MotionEvent.ACTION_UP || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                swallowTouch = false;
+            }
+            return true;
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     // ------------------------------------------------------------ UI

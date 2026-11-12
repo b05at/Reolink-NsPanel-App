@@ -121,6 +121,11 @@ public final class Prefs {
     /** Vorschaubilder bei Bewegung speichern. */
     public static boolean thumbnails(Context c) { return sp(c).getBoolean("thumbnails", true); }
 
+    /** Bildschirm-Timeout im Livebild in Sekunden: -1 = System-Standard, 0 = nie. */
+    public static int screenTimeout(Context c)  { return sp(c).getInt("screenTimeout", -1); }
+    /** Ruhemodus statt echtem Ausschalten: Berührung weckt das Display. */
+    public static boolean tapToWake(Context c)  { return sp(c).getBoolean("tapToWake", false); }
+
     public static boolean muted(Context c)      { return sp(c).getBoolean("muted", true); }
     public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }
 

@@ -74,6 +74,17 @@ Unter ⚙ → *Kameras & Türklingeln* beliebig viele Kameras anlegen. Pro Kamer
 
 Die Reolink-API liefert keine Vorschaubilder zu Aufnahmen. Die App speichert deshalb zu Beginn jeder Bewegung ein kleines Kamerabild (320×180) und ordnet es der passenden Aufnahme zu. Aufnahmen, die bereits abgespielt wurden, bekommen ein Bild aus dem Video. Aufnahmen von vor der Installation bzw. aus Zeiten, in denen das Panel aus war, zeigen ein Platzhalter-Symbol. Die Bilder werden 3 Wochen aufbewahrt.
 
+## Bildschirm
+
+Unter ⚙ → *Bildschirm*:
+
+- **Bildschirm-Timeout**: Wie lange das Livebild ohne Berührung an bleibt (System-Standard, Nie, 15 s … 30 min).
+- **Display per Tipp aufwecken**: Statt echtem Ausschalten geht das Panel in einen Ruhemodus. Das Bild wird schwarz und auf minimale Helligkeit gedimmt, der Stream pausiert. Ein Tipp weckt das Display sofort. Grund: Ist das Display von Android ganz ausgeschaltet, reagiert der Touchscreen nicht.
+- Ohne Tipp-Aufwecken schaltet die App das Display nach dem Timeout wirklich aus. Dafür braucht sie einmalig die Erlaubnis als Geräteadministrator (Knopf in den Einstellungen) oder per ADB:
+  `adb shell dpm set-active-admin at.reolinkpanel.viewer/.AdminReceiver`
+
+Bewegung und Türklingel wecken das Display in allen Modi.
+
 ## Hinweise
 
 - **Display aus:** Nach Ende der Bewegung und Ablauf der Anzeigedauer geht das Display gemäß dem System-Bildschirm-Timeout des Panels aus.
