@@ -136,9 +136,9 @@ public class SettingsActivity extends Activity {
 
     private void fill() {
         cbChime.setChecked(Prefs.chime(this));
-        int t = Prefs.screenTimeout(this);
+        int timeout = Prefs.screenTimeout(this);
         int sel = 0;
-        for (int i = 0; i < TIMEOUTS.length; i++) if (TIMEOUTS[i] == t) sel = i;
+        for (int i = 0; i < TIMEOUTS.length; i++) if (TIMEOUTS[i] == timeout) sel = i;
         spTimeout.setSelection(sel);
         cbTapWake.setChecked(Prefs.tapToWake(this));
         cbGridLive.setChecked(Prefs.gridLive(this));
