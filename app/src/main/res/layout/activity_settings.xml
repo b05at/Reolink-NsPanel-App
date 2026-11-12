@@ -93,9 +93,9 @@
                 <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bildschirm" />
                 <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bildschirm-Timeout (Livebild ohne Berührung)" />
                 <Spinner android:id="@+id/spTimeout" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="4dp" android:background="@drawable/field_bg" android:paddingLeft="4dp" android:popupBackground="@color/surface" android:spinnerMode="dropdown" />
-                <CheckBox android:id="@+id/cbTapWake" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Display per Tipp aufwecken" />
+                <CheckBox android:id="@+id/cbProxWake" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Display per Handbewegung einschalten (Näherungssensor)" />
                 <TextView android:id="@+id/tvScreenHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/textDim" android:textSize="12sp" />
-                <Button android:id="@+id/btnAdmin" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/chip" android:text="Ausschalten durch die App erlauben" />
+                <Button android:id="@+id/btnAdmin" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/chip" android:text="Display-Ausschalten erlauben" />
             </LinearLayout>
 
             <!-- Bild -->

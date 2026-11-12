@@ -48,7 +48,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private PlayerView playerView;
     private ExoPlayer player;
     private DashboardView dashboard;
-    private View controls, sidePanel, topLeft, ptzPanel, sleepOverlay;
+    private View controls, sidePanel, topLeft, ptzPanel;
     private TextView statusText, motionBadge, camChip;
     private ImageButton btnSound, btnZoom, btnSiren, btnPtz, btnLight, btnGrid, btnRec;
     private TextView btnStream;
@@ -77,10 +77,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private boolean ptzMoving = false;
     private boolean ptzErrorShown = false;
 
-    // --- Bildschirm-Timeout / Ruhemodus
-    private boolean sleeping;          // Ruhemodus aktiv (schwarz, Tipp weckt)
-    private boolean screenReleased;    // Display darf vom System ausgeschaltet werden
-    private boolean swallowTouch;      // Berührung, die geweckt hat, nicht weiterreichen
+    // --- Bildschirm-Timeout
+    private boolean screenReleased;    // Display darf ausgeschaltet werden
+
+    // --- Ersatz-Standbilder, falls RTSP nicht lädt
+    private android.widget.ImageView snapView;
+    private volatile boolean snapRunning;
+    private Thread snapThread;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable sleepRunnable = new Runnable() {
@@ -118,7 +121,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         sidePanel = findViewById(R.id.sidePanel);
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
-        sleepOverlay = findViewById(R.id.sleepOverlay);
+        snapView = findViewById(R.id.snapView);
         statusText = findViewById(R.id.status);
         motionBadge = findViewById(R.id.motionBadge);
         camChip = findViewById(R.id.camChip);
@@ -227,7 +230,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         super.onNewIntent(intent);
         setIntent(intent);
         if (started && handleEventIntent(intent)) {
-            if (sleeping) leaveSleepUi();
+            screenReleased = false;
             applyMode();
             resetSleepTimer();
         }
@@ -262,7 +265,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
         dashboard.stop();
-        leaveSleepUi();
+        stopSnapFallback();
         screenReleased = false;
         if (returnToGrid) {
             returnToGrid = false;
@@ -361,6 +364,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         btnRec.setVisibility(single && hasCam ? View.VISIBLE : View.GONE);
         camChip.setText(gridMode ? "Alle Kameras ▾" : (cam != null ? cam.displayName() : "Kamera") + (cams.size() >= 2 ? " ▾" : ""));
 
+        stopSnapFallback();
         if (gridMode) {
             stopLive();
             hideStatus();
@@ -413,7 +417,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 if (active && ring && camId != null && (gridMode || cam == null || !camId.equals(cam.id))) {
                     switchToCam(camId, false);
                 }
-                if (active && sleeping) wakeUp();
+                if (active) screenReleased = false;
                 applyMotion(active, camId, ring);
                 // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
                 if (!active && returnToGrid) showGrid();
@@ -438,7 +442,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateKeepOn() {
         boolean managed = effectiveTimeoutMs() != -1 && !screenReleased;
-        if (managed || sleeping || MotionService.motionActive || sirenOn) {
+        if (managed || MotionService.motionActive || sirenOn) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -496,6 +500,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             @Override
             public void onRenderedFirstFrame() {
                 gotFrame = true;
+                stopSnapFallback();
                 handler.removeCallbacks(firstFrameTimeout);
                 handler.removeCallbacks(stallCheck);
                 hideStatus();
@@ -549,7 +554,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
             playCandidate();
             return;
         }
-        scheduleRetry("Keine Verbindung zur Kamera – neuer Versuch…");
+        // Standbilder zeigen, damit trotzdem etwas zu sehen ist – Livebild wird weiter versucht
+        startSnapFallback();
+        scheduleRetry("Kein Livebild (RTSP: " + reason + ") – zeige Standbilder.\n"
+                + "Bitte RTSP in der Reolink-App aktivieren / Verbindungstest ausführen.");
     }
 
     private void stopLive() {
@@ -788,94 +796,96 @@ public class MainActivity extends Activity implements MotionService.Listener {
         int t = Prefs.screenTimeout(this);
         if (t == 0) return 0;
         if (t > 0) return t * 1000;
-        if (!Prefs.tapToWake(this)) return -1;
-        // Ruhemodus mit System-Standard: Systemwert übernehmen
-        try {
-            return Math.max(10000, Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT));
-        } catch (Exception e) {
-            return 60000;
-        }
+        return -1;
     }
 
     private void resetSleepTimer() {
         handler.removeCallbacks(sleepRunnable);
         if (!started) return;
         int ms = effectiveTimeoutMs();
-        if (ms > 0 && !sleeping) handler.postDelayed(sleepRunnable, ms);
+        if (ms > 0 && !screenReleased) handler.postDelayed(sleepRunnable, ms);
         updateKeepOn();
     }
 
+    /** Display nach dem Timeout wirklich ausschalten. */
     private void goToSleep() {
-        if (!started || sleeping) return;
+        if (!started) return;
         // Nicht während Bewegung, Sirene oder Schwenken
         if (MotionService.motionActive || sirenOn || ptzPanel.getVisibility() == View.VISIBLE) {
             resetSleepTimer();
             return;
         }
-        if (Prefs.tapToWake(this)) {
-            // Ruhemodus: Bild schwarz, Helligkeit minimal, Stream aus – Display bleibt berührbar
-            sleeping = true;
-            stopLive();
-            dashboard.stop();
-            hideStatus();
-            sleepOverlay.setVisibility(View.VISIBLE);
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF;
-            getWindow().setAttributes(lp);
-            updateKeepOn();
-        } else {
-            // Echtes Ausschalten: mit Geräteadministrator sofort, sonst über das System-Timeout
-            screenReleased = true;
-            updateKeepOn();
-            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-            ComponentName admin = new ComponentName(this, AdminReceiver.class);
-            if (dpm != null && dpm.isAdminActive(admin)) {
-                try { dpm.lockNow(); } catch (SecurityException ignored) {}
-            }
+        screenReleased = true;
+        updateKeepOn();
+        DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(this, AdminReceiver.class);
+        if (dpm != null && dpm.isAdminActive(admin)) {
+            // sofort aus – Bewegung, Klingel oder Näherungssensor schalten wieder ein
+            try { dpm.lockNow(); } catch (SecurityException ignored) {}
         }
-    }
-
-    private void wakeUp() {
-        boolean wasSleeping = sleeping;
-        leaveSleepUi();
-        screenReleased = false;
-        if (wasSleeping) applyMode();
-        showControls();
-        resetSleepTimer();
-    }
-
-    private void leaveSleepUi() {
-        sleeping = false;
-        sleepOverlay.setVisibility(View.GONE);
-        WindowManager.LayoutParams lp = getWindow().getAttributes();
-        if (lp.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
-            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
-            getWindow().setAttributes(lp);
-        }
+        // ohne Geräteadministrator schaltet Android nach seinem eigenen Timeout ab
     }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
-            if (sleeping) {
-                swallowTouch = true;   // diese Berührung weckt nur, löst nichts aus
-                wakeUp();
-                return true;
-            }
-            swallowTouch = false;
             if (screenReleased) {
                 screenReleased = false;
                 updateKeepOn();
             }
             resetSleepTimer();
         }
-        if (swallowTouch) {
-            if (ev.getActionMasked() == MotionEvent.ACTION_UP || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                swallowTouch = false;
-            }
-            return true;
-        }
         return super.dispatchTouchEvent(ev);
+    }
+
+    // ------------------------------------------------------------ Ersatz-Standbilder
+
+    /** Zeigt Standbilder über die HTTP-API, solange das RTSP-Livebild nicht lädt. */
+    private void startSnapFallback() {
+        if (snapRunning || cam == null || gridMode) return;
+        snapRunning = true;
+        final ReolinkApi a = ReolinkApi.from(cam);
+        snapView.setScaleType(Prefs.zoom(this) ? android.widget.ImageView.ScaleType.CENTER_CROP
+                : android.widget.ImageView.ScaleType.FIT_CENTER);
+        snapThread = new Thread(new Runnable() {
+            @Override public void run() {
+                while (snapRunning) {
+                    try {
+                        byte[] jpg = a.snap(640, 360);
+                        android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+                        o.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;
+                        o.inSampleSize = 1;
+                        android.graphics.BitmapFactory.Options b = new android.graphics.BitmapFactory.Options();
+                        b.inJustDecodeBounds = true;
+                        android.graphics.BitmapFactory.decodeByteArray(jpg, 0, jpg.length, b);
+                        while (b.outWidth / (o.inSampleSize * 2) >= 640) o.inSampleSize *= 2;
+                        final android.graphics.Bitmap bmp =
+                                android.graphics.BitmapFactory.decodeByteArray(jpg, 0, jpg.length, o);
+                        runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                if (!snapRunning || bmp == null) return;
+                                snapView.setImageBitmap(bmp);
+                                snapView.setVisibility(View.VISIBLE);
+                            }
+                        });
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        return;
+                    } catch (Exception e) {
+                        try { Thread.sleep(3000); } catch (InterruptedException ie) { return; }
+                    }
+                }
+            }
+        }, "snap-fallback");
+        snapThread.start();
+    }
+
+    private void stopSnapFallback() {
+        snapRunning = false;
+        if (snapThread != null) snapThread.interrupt();
+        snapThread = null;
+        snapView.setVisibility(View.GONE);
+        snapView.setImageBitmap(null);
     }
 
     // ------------------------------------------------------------ UI

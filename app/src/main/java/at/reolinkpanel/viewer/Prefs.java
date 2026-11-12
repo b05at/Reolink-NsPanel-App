@@ -123,8 +123,8 @@ public final class Prefs {
 
     /** Bildschirm-Timeout im Livebild in Sekunden: -1 = System-Standard, 0 = nie. */
     public static int screenTimeout(Context c)  { return sp(c).getInt("screenTimeout", -1); }
-    /** Ruhemodus statt echtem Ausschalten: Berührung weckt das Display. */
-    public static boolean tapToWake(Context c)  { return sp(c).getBoolean("tapToWake", false); }
+    /** Ausgeschaltetes Display per Handbewegung (Näherungssensor) einschalten. */
+    public static boolean proxWake(Context c)   { return sp(c).getBoolean("proxWake", true); }
 
     public static boolean muted(Context c)      { return sp(c).getBoolean("muted", true); }
     public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }

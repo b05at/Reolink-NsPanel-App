@@ -194,6 +194,14 @@ public class ReolinkApi {
 
     // ---------------------------------------------------------------- Infos
 
+    /** RTSP-Status laut Kamera: {aktiv (1/0, -1 = unbekannt), Port}. */
+    public int[] rtspSettings() throws IOException, ApiException {
+        JSONObject v = call("GetNetPort", channelParam()).optJSONObject("value");
+        JSONObject n = v == null ? null : v.optJSONObject("NetPort");
+        if (n == null) return new int[]{-1, 554};
+        return new int[]{n.optInt("rtspEnable", -1), n.optInt("rtspPort", 554)};
+    }
+
     public String deviceName() throws IOException, ApiException {
         JSONObject v = call("GetDevInfo", channelParam()).optJSONObject("value");
         JSONObject d = v == null ? null : v.optJSONObject("DevInfo");

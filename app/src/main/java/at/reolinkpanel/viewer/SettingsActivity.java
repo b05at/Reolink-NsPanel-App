@@ -32,7 +32,7 @@ public class SettingsActivity extends Activity {
     private RadioGroup rgLive, rgRec, rgTrigger;
     private LinearLayout camList;
     private Spinner spTimeout;
-    private CheckBox cbTapWake;
+    private CheckBox cbProxWake;
     private TextView tvScreenHint;
     private View btnAdmin;
 
@@ -47,7 +47,7 @@ public class SettingsActivity extends Activity {
 
         camList = findViewById(R.id.camList);
         spTimeout = findViewById(R.id.spTimeout);
-        cbTapWake = findViewById(R.id.cbTapWake);
+        cbProxWake = findViewById(R.id.cbProxWake);
         tvScreenHint = findViewById(R.id.tvScreenHint);
         btnAdmin = findViewById(R.id.btnAdmin);
         ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, TIMEOUT_LABELS);
@@ -85,7 +85,7 @@ public class SettingsActivity extends Activity {
             @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) { updateScreenHint(); }
             @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        cbTapWake.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        cbProxWake.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(CompoundButton b, boolean checked) { updateScreenHint(); }
         });
         btnAdmin.setOnClickListener(new View.OnClickListener() {
@@ -140,7 +140,7 @@ public class SettingsActivity extends Activity {
         int sel = 0;
         for (int i = 0; i < TIMEOUTS.length; i++) if (TIMEOUTS[i] == timeout) sel = i;
         spTimeout.setSelection(sel);
-        cbTapWake.setChecked(Prefs.tapToWake(this));
+        cbProxWake.setChecked(Prefs.proxWake(this));
         cbGridLive.setChecked(Prefs.gridLive(this));
         etGridSeconds.setText(String.valueOf(Prefs.gridSeconds(this)));
         rgLive.check("main".equals(Prefs.liveStream(this)) ? R.id.rbLiveMain : R.id.rbLiveSub);
@@ -171,7 +171,7 @@ public class SettingsActivity extends Activity {
         SharedPreferences.Editor e = Prefs.sp(this).edit();
         e.putBoolean("chime", cbChime.isChecked());
         e.putInt("screenTimeout", TIMEOUTS[Math.max(0, spTimeout.getSelectedItemPosition())]);
-        e.putBoolean("tapToWake", cbTapWake.isChecked());
+        e.putBoolean("proxWake", cbProxWake.isChecked());
         e.putBoolean("gridLive", cbGridLive.isChecked());
         e.putInt("gridSeconds", Math.min(60, Math.max(1, num(etGridSeconds, 2))));
         e.putString("liveStream", rgLive.getCheckedRadioButtonId() == R.id.rbLiveMain ? "main" : "sub");
@@ -202,23 +202,21 @@ public class SettingsActivity extends Activity {
     /** Erklärt, was mit der aktuellen Auswahl passiert. */
     private void updateScreenHint() {
         int t = TIMEOUTS[Math.max(0, spTimeout.getSelectedItemPosition())];
-        boolean tap = cbTapWake.isChecked();
-        boolean needsAdmin = !tap && t > 0;
-        btnAdmin.setVisibility(needsAdmin && !adminActive() ? View.VISIBLE : View.GONE);
+        boolean admin = adminActive();
+        btnAdmin.setVisibility(t > 0 && !admin ? View.VISIBLE : View.GONE);
         String hint;
         if (t == 0) {
             hint = "Das Display bleibt im Livebild dauerhaft an.";
-        } else if (tap) {
-            hint = "Nach Ablauf wird das Bild schwarz und auf minimale Helligkeit gedimmt (Stream pausiert, spart CPU). "
-                    + "Ein Tipp auf den Bildschirm weckt das Display sofort. Bewegung und Klingel wecken wie gewohnt.";
         } else if (t < 0) {
-            hint = "Das Display schaltet sich nach dem Timeout aus den Android-Einstellungen aus.";
-        } else if (adminActive()) {
-            hint = "Das Display wird nach Ablauf ausgeschaltet. Bewegung und Klingel schalten es wieder ein.";
+            hint = "Das Display schaltet sich nach dem Timeout aus den Android-Einstellungen ab.";
+        } else if (admin) {
+            hint = "Das Display wird nach Ablauf ganz ausgeschaltet. Einschalten: Bewegung, Türklingel"
+                    + (cbProxWake.isChecked() ? " oder Handbewegung vor dem Panel." : ".");
         } else {
-            hint = "Damit die App das Display selbst ausschalten darf, einmal „Ausschalten erlauben“ tippen. "
+            hint = "Damit die App das Display selbst ausschalten darf, einmal „Display-Ausschalten erlauben“ tippen. "
                     + "Ohne diese Erlaubnis gilt das Timeout aus den Android-Einstellungen.";
         }
+        hint += "\nHinweis: Bei ganz ausgeschaltetem Display reagiert der Touchscreen des NSPanel Pro nicht.";
         tvScreenHint.setText(hint);
     }
 

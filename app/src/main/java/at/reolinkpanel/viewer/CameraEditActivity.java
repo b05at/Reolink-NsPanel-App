@@ -147,12 +147,34 @@ public class CameraEditActivity extends Activity {
                 boolean ok;
                 boolean bell = false;
                 String model = "";
+                int rtspPortFound = -1;
                 try {
                     api.login();
                     model = api.model();
                     msg = "✓ Verbunden: " + api.deviceName();
                     bell = model.toLowerCase(Locale.ROOT).contains("doorbell");
                     ok = true;
+                    // Livebild läuft über RTSP – separat prüfen
+                    try {
+                        int[] r = api.rtspSettings();
+                        if (r[0] == 0) {
+                            msg += "\n⚠ RTSP ist an der Kamera AUSGESCHALTET – ohne RTSP kein Livebild. "
+                                    + "In der Reolink-App: Einstellungen → Netzwerk → Erweitert → Server-Einstellungen → RTSP aktivieren.";
+                            ok = false;
+                        } else {
+                            rtspPortFound = r[1];
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    int port = rtspPortFound > 0 ? rtspPortFound : num(etRtspPort, 554);
+                    if (ok) {
+                        if (portOpen(text(etHost), port)) {
+                            msg += "\n✓ RTSP (Livebild) erreichbar auf Port " + port;
+                        } else {
+                            msg += "\n⚠ RTSP-Port " + port + " nicht erreichbar – RTSP an der Kamera aktivieren bzw. Port prüfen.";
+                            ok = false;
+                        }
+                    }
                 } catch (Exception ex) {
                     msg = "⚠ Fehlgeschlagen: " + ex.getMessage()
                             + "\nTipp: HTTPS/HTTP-Einstellung und Port prüfen.";
@@ -161,15 +183,31 @@ public class CameraEditActivity extends Activity {
                 final String m = msg;
                 final boolean good = ok;
                 final boolean isBell = bell;
+                final int foundPort = rtspPortFound;
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         tvTest.setTextColor(getColor(good ? R.color.accent : R.color.warn));
                         tvTest.setText(isBell ? m + "\nTürklingel erkannt – Klingel-Erkennung aktiviert." : m);
                         if (isBell) cbDoorbell.setChecked(true);
+                        // RTSP-Port aus der Kamera übernehmen
+                        if (foundPort > 0) etRtspPort.setText(String.valueOf(foundPort));
                     }
                 });
             }
         }).start();
+    }
+
+    /** Prüft, ob ein TCP-Port erreichbar ist (läuft im Hintergrund-Thread). */
+    private static boolean portOpen(String host, int port) {
+        java.net.Socket so = new java.net.Socket();
+        try {
+            so.connect(new java.net.InetSocketAddress(host, port), 3000);
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { so.close(); } catch (Exception ignored) {}
+        }
     }
 
     private static String text(EditText e) { return e.getText().toString().trim(); }

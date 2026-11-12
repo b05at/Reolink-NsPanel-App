@@ -78,12 +78,15 @@ Die Reolink-API liefert keine Vorschaubilder zu Aufnahmen. Die App speichert des
 
 Unter ⚙ → *Bildschirm*:
 
-- **Bildschirm-Timeout**: Wie lange das Livebild ohne Berührung an bleibt (System-Standard, Nie, 15 s … 30 min).
-- **Display per Tipp aufwecken**: Statt echtem Ausschalten geht das Panel in einen Ruhemodus. Das Bild wird schwarz und auf minimale Helligkeit gedimmt, der Stream pausiert. Ein Tipp weckt das Display sofort. Grund: Ist das Display von Android ganz ausgeschaltet, reagiert der Touchscreen nicht.
-- Ohne Tipp-Aufwecken schaltet die App das Display nach dem Timeout wirklich aus. Dafür braucht sie einmalig die Erlaubnis als Geräteadministrator (Knopf in den Einstellungen) oder per ADB:
+- **Bildschirm-Timeout**: Wie lange das Livebild ohne Berührung an bleibt (System-Standard, Nie, 15 s … 30 min). Danach wird das Display **ganz ausgeschaltet**.
+- Dafür braucht die App einmalig die Erlaubnis als Geräteadministrator (Knopf „Display-Ausschalten erlauben“) oder per ADB:
   `adb shell dpm set-active-admin at.reolinkpanel.viewer/.AdminReceiver`
+- **Einschalten**: Bewegung und Türklingel wie gewohnt, zusätzlich per **Handbewegung** vor dem Panel (Näherungssensor, abschaltbar).
+- Bei ganz ausgeschaltetem Display reagiert der Touchscreen des NSPanel Pro nicht – ein Tipp weckt es daher nicht.
 
-Bewegung und Türklingel wecken das Display in allen Modi.
+## Livebild lädt nicht?
+
+Der Verbindungstest prüft jetzt auch RTSP (Livebild). Meldet er „RTSP ausgeschaltet“, in der Reolink-App unter *Einstellungen → Netzwerk → Erweitert → Server-Einstellungen* RTSP aktivieren. Bis das Livebild läuft, zeigt die App sekündlich aktualisierte Standbilder.
 
 ## Hinweise
 

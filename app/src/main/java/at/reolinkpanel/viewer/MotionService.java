@@ -7,6 +7,10 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.AudioAttributes;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
@@ -25,7 +29,7 @@ import java.util.concurrent.Executors;
  * Hintergrunddienst: fragt alle Kameras zyklisch nach Bewegung bzw. Klingeln ab,
  * weckt dann den Bildschirm und holt das Livebild der betroffenen Kamera nach vorne.
  */
-public class MotionService extends Service {
+public class MotionService extends Service implements SensorEventListener {
 
     public static final String ACTION_RELOAD = "at.reolinkpanel.viewer.RELOAD";
     public static final String EXTRA_MOTION = "motion";
@@ -74,6 +78,13 @@ public class MotionService extends Service {
     private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private String shownStatus;
 
+    // --- Näherungssensor (Aufwecken per Handbewegung)
+    private SensorManager sensorManager;
+    private Sensor proxSensor;
+    private boolean proxRegistered;
+    private float proxBaseline = Float.NaN;
+    private long proxLastChange, proxLastWake;
+
     private PowerManager pm;
     private PowerManager.WakeLock cpuLock;
     private PowerManager.WakeLock screenLock;
@@ -109,6 +120,9 @@ public class MotionService extends Service {
             wifiLock.acquire();
         }
 
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        updateProximity();
+
         running = true;
         worker = new Thread(new Runnable() {
             @Override public void run() { loop(); }
@@ -122,6 +136,7 @@ public class MotionService extends Service {
         startForeground(NOTIF_ID, buildNotification(status));
         if (intent != null && ACTION_RELOAD.equals(intent.getAction())) {
             reloadRequested = true;   // neue Zugangsdaten übernehmen
+            updateProximity();
         }
         return START_STICKY;
     }
@@ -131,6 +146,7 @@ public class MotionService extends Service {
         running = false;
         if (worker != null) worker.interrupt();
         thumbExecutor.shutdownNow();
+        if (proxRegistered) sensorManager.unregisterListener(this);
         if (cpuLock != null && cpuLock.isHeld()) cpuLock.release();
         if (screenLock != null && screenLock.isHeld()) screenLock.release();
         if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
@@ -337,6 +353,56 @@ public class MotionService extends Service {
             }
         });
     }
+
+    // ------------------------------------------------------------------ Näherungssensor
+
+    /** Sensor je nach Einstellung an- bzw. abmelden. */
+    private void updateProximity() {
+        if (sensorManager == null) return;
+        boolean want = Prefs.proxWake(this);
+        if (want && !proxRegistered) {
+            proxSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, true);   // Wake-up-Variante bevorzugt
+            if (proxSensor == null) proxSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+            if (proxSensor != null) {
+                proxRegistered = sensorManager.registerListener(this, proxSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                proxBaseline = Float.NaN;
+            }
+        } else if (!want && proxRegistered) {
+            sensorManager.unregisterListener(this);
+            proxRegistered = false;
+        }
+    }
+
+    /**
+     * Der Sensor des NSPanel Pro ist im Gehäuse oft "falsch" kalibriert (Ruhewert = Maximalwert
+     * oder ein fester Wert). Darum wird jede deutliche Änderung gegenüber dem Ruhewert als
+     * Annäherung gewertet – unabhängig von der Richtung.
+     */
+    @Override
+    public void onSensorChanged(SensorEvent e) {
+        float v = e.values[0];
+        long now = System.currentTimeMillis();
+        if (Float.isNaN(proxBaseline)) {
+            proxBaseline = v;
+            proxLastChange = now;
+            return;
+        }
+        float diff = Math.abs(v - proxBaseline);
+        float threshold = Math.max(0.5f, Math.abs(proxBaseline) * 0.2f);
+        if (diff >= threshold) {
+            if (!pm.isInteractive() && now - proxLastWake > 3000) {
+                proxLastWake = now;
+                // Display einschalten; das Livebild hält es dann über sein eigenes Timeout an
+                screenLock.acquire(10000);
+            }
+        }
+        // Ruhewert nachführen, wenn sich der Wert eine Weile nicht ändert
+        if (now - proxLastChange > 5000 || diff < threshold) proxBaseline = v;
+        proxLastChange = now;
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     private void notifyListener(boolean active, String camId, boolean ring) {
         Listener l = listener;
