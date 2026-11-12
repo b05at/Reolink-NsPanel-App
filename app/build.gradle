@@ -10,8 +10,8 @@ android {
         applicationId 'at.reolinkpanel.viewer'
         minSdk 26          // Android 8.0
         targetSdk 28       // NSPanel Pro läuft auf Android 8.1
-        versionCode 9
-        versionName '2.2'
+        versionCode 10
+        versionName '2.3'
     }
 
     // Fester Debug-Schlüssel im Repo: so lassen sich neue Versionen

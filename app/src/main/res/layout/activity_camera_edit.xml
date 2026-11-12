@@ -102,8 +102,8 @@
 
             <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
                 <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Erweitert" />
-                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Eigener RTSP-Pfad (leer = automatisch)" />
-                <EditText android:id="@+id/etRtspPath" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. h264Preview_01_sub" android:inputType="textUri" android:imeOptions="actionDone" />
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Eigener RTSP-Pfad oder komplette RTSP-URL (leer = automatisch)" />
+                <EditText android:id="@+id/etRtspPath" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. h264Preview_01_sub oder rtsp://…" android:inputType="textUri" android:imeOptions="actionDone" />
             </LinearLayout>
 
             <Button android:id="@+id/btnDelete" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/chip" android:text="Kamera entfernen" android:textColor="@color/motion" />

@@ -79,6 +79,19 @@ public class ReolinkApi {
     // ---------------------------------------------------------------- Livebild
 
     /** RTSP-URL, z. B. rtsp://admin:pw@192.168.1.50:554/Preview_01_sub */
+    /** Eigener Pfad (z. B. "h264Preview_01_sub") oder vollständige rtsp://-URL. */
+    public String rtspUrlCustom(String pathOrUrl) {
+        String p = pathOrUrl.trim();
+        if (p.toLowerCase(java.util.Locale.ROOT).startsWith("rtsp://")) {
+            // Vollständige URL: Zugangsdaten ergänzen, falls keine enthalten sind
+            String rest = p.substring(7);
+            if (rest.contains("@")) return p;
+            return "rtsp://" + enc(user) + ":" + enc(pass) + "@" + rest;
+        }
+        if (p.startsWith("/")) p = p.substring(1);
+        return "rtsp://" + enc(user) + ":" + enc(pass) + "@" + host + ":" + rtspPort + "/" + p;
+    }
+
     public String rtspUrl(String stream) {
         String path = rtspPathOverride.isEmpty() ? "Preview_01_" + stream : rtspPathOverride;
         if (path.startsWith("/")) path = path.substring(1);

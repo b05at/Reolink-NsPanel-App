@@ -64,7 +64,15 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private String badgeCamId;
 
     // --- Stream-Auswahl mit automatischem Rückfall
-    private final List<String> candidates = new ArrayList<>();
+    /** Eine Verbindungsvariante für das Livebild (Stream, Pfad, Transport). */
+    private static class Variant {
+        String stream, url, key;
+        boolean tcp;
+    }
+
+    private final List<Variant> candidates = new ArrayList<>();
+    /** Ab hier gehören die Varianten zum SD-Substream (davor: HD-Versuche). */
+    private int firstSubIdx;
     private int candIdx;
     private boolean gotFrame;
 
@@ -452,35 +460,85 @@ public class MainActivity extends Activity implements MotionService.Listener {
     // ------------------------------------------------------------ Livebild
 
     /**
-     * SD = Substream. HD versucht zuerst den mittleren Stream (ext, max. ~1080p),
-     * dann den Hauptstream. Kann das Panel nichts davon abspielen (4K/H.265 übersteigt
-     * den Decoder), fällt die App automatisch auf SD zurück.
+     * Baut die Liste der Verbindungsvarianten. Reolink-Firmwares unterscheiden sich beim
+     * RTSP-Pfad (Preview_01_sub / h264Preview_01_sub / h265Preview_01_sub) und manche
+     * liefern nur per UDP bzw. nur per TCP zuverlässig. Die zuletzt funktionierende
+     * Variante wird pro Kamera gespeichert und zuerst probiert.
+     * SD = Substream. HD versucht zuerst ext, dann main; klappt das nicht, geht es auf SD zurück.
      */
     private void startLive() {
         candidates.clear();
-        if (cam == null || !cam.rtspPath.trim().isEmpty() || "sub".equals(Prefs.liveStream(this))) {
-            candidates.add("sub");
+        if (cam == null) {
+            candIdx = 0;
+            playCandidate();
+            return;
+        }
+        ReolinkApi a = ReolinkApi.from(cam);
+        String custom = cam.rtspPath.trim();
+        if (!custom.isEmpty()) {
+            // Eigene URL bzw. eigener Pfad aus den Kamera-Einstellungen
+            addVariant("sub", a.rtspUrlCustom(custom), true);
+            addVariant("sub", a.rtspUrlCustom(custom), false);
+            firstSubIdx = 0;
         } else {
-            candidates.addAll(Arrays.asList("ext", "main", "sub"));
+            boolean hd = !"sub".equals(Prefs.liveStream(this));
+            if (hd) {
+                for (String st : new String[]{"ext", "main"}) addPathVariants(a, st);
+            }
+            firstSubIdx = candidates.size();
+            addPathVariants(a, "sub");
+            // bewährte Variante nach vorne holen (nur innerhalb der SD-Varianten bzw. als erste HD-Variante)
+            String good = Prefs.sp(this).getString("rtspOk_" + cam.id, null);
+            if (good != null) {
+                for (int i = 0; i < candidates.size(); i++) {
+                    Variant v = candidates.get(i);
+                    if (good.equals(v.key) && "sub".equals(v.stream) && i > firstSubIdx) {
+                        candidates.remove(i);
+                        candidates.add(firstSubIdx, v);
+                        break;
+                    }
+                }
+            }
         }
         candIdx = 0;
         playCandidate();
     }
 
+    private void addPathVariants(ReolinkApi a, String stream) {
+        for (String prefix : new String[]{"", "h264", "h265"}) {
+            String url = a.rtspUrlCustom(prefix + "Preview_01_" + stream);
+            addVariant(stream, url, true);
+            addVariant(stream, url, false);
+        }
+    }
+
+    private void addVariant(String stream, String url, boolean tcp) {
+        Variant v = new Variant();
+        v.stream = stream;
+        v.url = url;
+        v.tcp = tcp;
+        // Schlüssel ohne Zugangsdaten
+        v.key = url.substring(url.indexOf('@') + 1) + (tcp ? "|tcp" : "|udp");
+        candidates.add(v);
+    }
+
     private boolean isHdAttempt() {
-        return !"sub".equals(candidates.get(candIdx));
+        return candIdx < firstSubIdx;
     }
 
     private void playCandidate() {
         stopLive();
         if (gridMode) return;
-        if (cam == null) {
+        if (cam == null || candidates.isEmpty()) {
             showStatus("Noch keine Kamera eingerichtet –\nüber ⚙ → Kamera hinzufügen");
             return;
         }
-        final String stream = candidates.get(candIdx);
+        final Variant v = candidates.get(candIdx);
         gotFrame = false;
-        showStatus(isHdAttempt() ? "Verbinde (HD)…" : "Verbinde…");
+        if (!snapRunning) {
+            showStatus((isHdAttempt() ? "Verbinde (HD)…" : "Verbinde…")
+                    + (candIdx > 0 ? "  Variante " + (candIdx + 1) + "/" + candidates.size() : ""));
+        }
 
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(1000, 3000, 250, 500)   // geringe Verzögerung
@@ -490,11 +548,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
         playerView.setPlayer(player);
         applyZoom();
 
-        String url = ReolinkApi.from(cam).rtspUrl(stream);
         MediaSource source = new RtspMediaSource.Factory()
-                .setForceUseRtpTcp(true)
+                .setForceUseRtpTcp(v.tcp)          // false = UDP, bei Bedarf automatisch TCP
                 .setTimeoutMs(8000)
-                .createMediaSource(MediaItem.fromUri(Uri.parse(url)));
+                .createMediaSource(MediaItem.fromUri(Uri.parse(v.url)));
 
         player.addListener(new Player.Listener() {
             @Override
@@ -504,13 +561,14 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 handler.removeCallbacks(firstFrameTimeout);
                 handler.removeCallbacks(stallCheck);
                 hideStatus();
+                if (cam != null) Prefs.sp(MainActivity.this).edit().putString("rtspOk_" + cam.id, v.key).apply();
             }
 
             @Override
             public void onTracksChanged(Tracks tracks) {
                 // Video vorhanden, aber vom Panel nicht dekodierbar (z. B. 4K H.265)
                 if (tracks.containsType(C.TRACK_TYPE_VIDEO) && !tracks.isTypeSupported(C.TRACK_TYPE_VIDEO, false)) {
-                    streamFailed("Format nicht unterstützt");
+                    streamFailed("Videoformat nicht unterstützt");
                 }
             }
 
@@ -528,7 +586,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                streamFailed(error.getErrorCodeName());
+                streamFailed(error.getErrorCodeName().replace("ERROR_CODE_", ""));
             }
         });
         player.setMediaSource(source);
@@ -541,23 +599,36 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void streamFailed(String reason) {
         if (player == null) return;
         handler.removeCallbacks(firstFrameTimeout);
-        if (!gotFrame && isHdAttempt() && candIdx < candidates.size() - 1) {
+        if (gotFrame) {
+            // lief schon – gleiche Variante erneut verbinden
+            scheduleRetry("Verbindung unterbrochen – verbinde neu…");
+            return;
+        }
+        if (candIdx < candidates.size() - 1) {
+            boolean wasHd = isHdAttempt();
             candIdx++;
-            if (!isHdAttempt()) {
+            if (wasHd && !isHdAttempt()) {
                 // Alle HD-Varianten gescheitert -> dauerhaft auf SD zurück
                 Prefs.sp(this).edit().putString("liveStream", "sub").apply();
                 updateButtons();
-                Toast.makeText(this, "HD kann am Panel nicht abgespielt werden – zurück auf SD.\n"
-                        + "Tipp: In der Reolink-App den Hauptstream auf H.264 bzw. max. 1080p stellen.",
+                Toast.makeText(this, "HD kann am Panel nicht abgespielt werden – zurück auf SD.",
                         Toast.LENGTH_LONG).show();
             }
             playCandidate();
             return;
         }
-        // Standbilder zeigen, damit trotzdem etwas zu sehen ist – Livebild wird weiter versucht
+        // Alle Varianten gescheitert: Standbilder zeigen, später von vorne probieren
         startSnapFallback();
-        scheduleRetry("Kein Livebild (RTSP: " + reason + ") – zeige Standbilder.\n"
-                + "Bitte RTSP in der Reolink-App aktivieren / Verbindungstest ausführen.");
+        candIdx = firstSubIdx;
+        String hint = reason.contains("CONNECTION") || reason.contains("TIMEOUT")
+                ? "RTSP-Port nicht erreichbar."
+                : reason.contains("BAD_HTTP_STATUS") || reason.contains("AUTH") || reason.contains("NOT_FOUND")
+                ? "Kamera lehnt den Stream ab (Pfad/Zugangsdaten)."
+                : "";
+        showStatus("Kein Livebild (" + reason + ") – zeige Standbilder. " + hint
+                + "\nTipp: Funktionierende RTSP-URL unter ⚙ → Kamera → Erweitert eintragen.");
+        handler.removeCallbacks(retry);
+        handler.postDelayed(retry, 15000);
     }
 
     private void stopLive() {

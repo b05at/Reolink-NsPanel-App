@@ -86,7 +86,7 @@ Unter ⚙ → *Bildschirm*:
 
 ## Livebild lädt nicht?
 
-Der Verbindungstest prüft jetzt auch RTSP (Livebild). Meldet er „RTSP ausgeschaltet“, in der Reolink-App unter *Einstellungen → Netzwerk → Erweitert → Server-Einstellungen* RTSP aktivieren. Bis das Livebild läuft, zeigt die App sekündlich aktualisierte Standbilder.
+Die App probiert automatisch mehrere RTSP-Varianten (`Preview_01_sub`, `h264Preview_01_sub`, `h265Preview_01_sub`, jeweils per TCP und UDP) und merkt sich die funktionierende. Alternativ unter ⚙ → Kamera → *Erweitert* die komplette RTSP-URL eintragen, die z. B. in einer anderen App funktioniert. Der Verbindungstest prüft jetzt auch RTSP (Livebild). Meldet er „RTSP ausgeschaltet“, in der Reolink-App unter *Einstellungen → Netzwerk → Erweitert → Server-Einstellungen* RTSP aktivieren. Bis das Livebild läuft, zeigt die App sekündlich aktualisierte Standbilder.
 
 ## Hinweise
 

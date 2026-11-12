@@ -191,10 +191,21 @@ public class DashboardView extends LinearLayout {
                 }, 5000);
             }
         });
+        // bewährte Verbindungsvariante aus dem Einzelbild verwenden (falls bekannt)
+        String url = t.api.rtspUrl("sub");
+        boolean tcp = true;
+        String good = Prefs.sp(getContext()).getString("rtspOk_" + t.cam.id, null);
+        if (good != null && good.contains("|")) {
+            String[] parts = good.split("\\|");
+            if (!parts[0].contains("Preview_01_ext") && !parts[0].contains("Preview_01_main")) {
+                url = t.api.rtspUrlCustom("rtsp://" + parts[0]);
+                tcp = "tcp".equals(parts[1]);
+            }
+        }
         t.player.setMediaSource(new RtspMediaSource.Factory()
-                .setForceUseRtpTcp(true)
+                .setForceUseRtpTcp(tcp)
                 .setTimeoutMs(8000)
-                .createMediaSource(MediaItem.fromUri(Uri.parse(t.api.rtspUrl("sub")))));
+                .createMediaSource(MediaItem.fromUri(Uri.parse(url))));
         t.player.prepare();
         t.player.setPlayWhenReady(true);
     }
