@@ -350,13 +350,15 @@ public class MainActivity extends Activity implements MotionService.Listener {
         btnGrid.setVisibility(cams.size() >= 2 ? View.VISIBLE : View.GONE);
         btnGrid.setActivated(gridMode);
         boolean single = !gridMode;
-        boolean bell = cam != null && cam.doorbell;
+        boolean hasCam = cam != null;
+        boolean bell = hasCam && cam.doorbell;
         btnRec.setVisibility(single ? View.VISIBLE : View.GONE);
         btnSound.setVisibility(single ? View.VISIBLE : View.GONE);
         btnStream.setVisibility(single ? View.VISIBLE : View.GONE);
-        btnPtz.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
-        btnLight.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
-        btnSiren.setVisibility(single && !bell ? View.VISIBLE : View.GONE);
+        btnPtz.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
+        btnLight.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
+        btnSiren.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
+        btnRec.setVisibility(single && hasCam ? View.VISIBLE : View.GONE);
         camChip.setText(gridMode ? "Alle Kameras ▾" : (cam != null ? cam.displayName() : "Kamera") + (cams.size() >= 2 ? " ▾" : ""));
 
         if (gridMode) {
@@ -371,7 +373,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             dashboard.setVisibility(View.GONE);
             playerView.setVisibility(View.VISIBLE);
             startLive();
-            if (!bell) queryLight();
+            if (hasCam && !bell) queryLight();
         }
         updateLight();
         setControls(controls.getVisibility() == View.VISIBLE);
@@ -469,7 +471,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         stopLive();
         if (gridMode) return;
         if (cam == null) {
-            showStatus("Bitte zuerst eine Kamera einrichten (⚙)");
+            showStatus("Noch keine Kamera eingerichtet –\nüber ⚙ → Kamera hinzufügen");
             return;
         }
         final String stream = candidates.get(candIdx);
@@ -585,6 +587,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     // ------------------------------------------------------------ Scheinwerfer
 
     private void queryLight() {
+        if (cam == null) return;
         final ReolinkApi a = api();
         final String camId = cam.id;
         executor.execute(new Runnable() {
