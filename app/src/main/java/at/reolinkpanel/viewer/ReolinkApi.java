@@ -314,6 +314,23 @@ public class ReolinkApi {
         return e;
     }
 
+    // ---------------------------------------------------------------- Fähigkeiten
+
+    /** Hat die Kamera eine Sirene? (ApiException der Kamera = nein, IOException = unbekannt) */
+    public boolean hasSiren() throws IOException {
+        try {
+            call("GetAudioAlarmV20", channelParam());
+            return true;
+        } catch (ApiException e) {
+            try {
+                call("GetAudioAlarm", channelParam());
+                return true;
+            } catch (ApiException e2) {
+                return false;
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- Scheinwerfer
 
     public boolean whiteLed() throws IOException, ApiException {

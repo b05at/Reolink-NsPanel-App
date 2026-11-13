@@ -375,6 +375,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         btnSound.setVisibility(single ? View.VISIBLE : View.GONE);
         btnStream.setVisibility(single ? View.VISIBLE : View.GONE);
         btnPtz.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
+        // Scheinwerfer/Sirene: sofort zeigen (außer Klingel), dann anhand der Kamera bestätigen
         btnLight.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
         btnSiren.setVisibility(single && hasCam && !bell ? View.VISIBLE : View.GONE);
         btnRec.setVisibility(single && hasCam ? View.VISIBLE : View.GONE);
@@ -394,7 +395,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             dashboard.setVisibility(View.GONE);
             playerView.setVisibility(View.VISIBLE);
             startLive();
-            if (hasCam && !bell) queryLight();
+            if (hasCam) probeCapabilities();
         }
         updateLight();
         setControls(controls.getVisibility() == View.VISIBLE);
@@ -756,6 +757,42 @@ public class MainActivity extends Activity implements MotionService.Listener {
     }
 
     // ------------------------------------------------------------ Scheinwerfer
+
+    /**
+     * Fragt die Kamera, ob sie Scheinwerfer und Sirene hat, und blendet die Knöpfe
+     * entsprechend ein – unabhängig davon, ob die Kamera als Türklingel markiert ist.
+     */
+    private void probeCapabilities() {
+        if (cam == null) return;
+        final ReolinkApi a = api();
+        final String camId = cam.id;
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                // null = unbekannt (Kamera offline) -> Anzeige nicht ändern
+                Boolean light = null, lightState = null, siren = null;
+                try {
+                    lightState = a.whiteLed();
+                    light = true;
+                } catch (ReolinkApi.ApiException e) {
+                    light = false;
+                } catch (Exception ignored) {
+                }
+                try {
+                    siren = a.hasSiren();
+                } catch (Exception ignored) {
+                }
+                final Boolean fLight = light, fState = lightState, fSiren = siren;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (cam == null || !camId.equals(cam.id) || gridMode || isDestroyed()) return;
+                        if (fLight != null) btnLight.setVisibility(fLight ? View.VISIBLE : View.GONE);
+                        if (fState != null) { lightOn = fState; updateLight(); }
+                        if (fSiren != null) btnSiren.setVisibility(fSiren ? View.VISIBLE : View.GONE);
+                    }
+                });
+            }
+        });
+    }
 
     private void queryLight() {
         if (cam == null) return;
