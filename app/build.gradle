@@ -12,8 +12,8 @@ android {
         targetSdk 28       // NSPanel Pro läuft auf Android 8.1
         // nur ARM (NSPanel Pro) – hält die APK mit VLC klein
         ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }
-        versionCode 11
-        versionName '2.4'
+        versionCode 12
+        versionName '2.4.1'
     }
 
     // Fester Debug-Schlüssel im Repo: so lassen sich neue Versionen
@@ -39,6 +39,11 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Native Bibliotheken (VLC) komprimiert speichern – halbiert die APK-Größe
+    packaging {
+        jniLibs { useLegacyPackaging true }
     }
 
     lint {
