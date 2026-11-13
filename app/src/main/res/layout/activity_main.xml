@@ -14,6 +14,13 @@
         app:show_buffering="never"
         app:shutter_background_color="@color/bg" />
 
+    <!-- VLC-Player (Ersatz, falls ExoPlayer den Stream nicht abspielt) -->
+    <org.videolan.libvlc.util.VLCVideoLayout
+        android:id="@+id/vlcLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <!-- Ersatzbild, falls das RTSP-Livebild nicht lädt -->
     <ImageView
         android:id="@+id/snapView"

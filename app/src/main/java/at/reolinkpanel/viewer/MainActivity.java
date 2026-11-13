@@ -67,8 +67,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
     /** Eine Verbindungsvariante für das Livebild (Stream, Pfad, Transport). */
     private static class Variant {
         String stream, url, key;
-        boolean tcp;
+        boolean tcp, vlc;
     }
+
+    // --- VLC als Ersatz-Player
+    private org.videolan.libvlc.LibVLC libVlc;
+    private org.videolan.libvlc.MediaPlayer vlcPlayer;
+    private org.videolan.libvlc.util.VLCVideoLayout vlcLayout;
 
     private final List<Variant> candidates = new ArrayList<>();
     /** Ab hier gehören die Varianten zum SD-Substream (davor: HD-Versuche). */
@@ -130,6 +135,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
         snapView = findViewById(R.id.snapView);
+        vlcLayout = findViewById(R.id.vlcLayout);
         statusText = findViewById(R.id.status);
         motionBadge = findViewById(R.id.motionBadge);
         camChip = findViewById(R.id.camChip);
@@ -161,6 +167,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 boolean muted = !Prefs.muted(MainActivity.this);
                 Prefs.sp(MainActivity.this).edit().putBoolean("muted", muted).apply();
                 if (player != null) player.setVolume(muted ? 0f : 1f);
+                if (vlcPlayer != null) vlcPlayer.setVolume(muted ? 0 : 100);
                 updateButtons();
                 showControls();
             }
@@ -285,6 +292,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     @Override
     protected void onDestroy() {
         executor.shutdown();   // laufende Befehle (z. B. Stopp) noch abschließen
+        if (libVlc != null) { libVlc.release(); libVlc = null; }
         super.onDestroy();
     }
 
@@ -377,6 +385,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             stopLive();
             hideStatus();
             playerView.setVisibility(View.GONE);
+            vlcLayout.setVisibility(View.GONE);
             dashboard.setVisibility(View.VISIBLE);
             dashboard.start(cams, Prefs.gridLive(this), Prefs.gridSeconds(this), Prefs.zoom(this));
             dashboard.setActive(MotionService.activeCamId, MotionService.motionActive, MotionService.activeRing);
@@ -477,8 +486,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
         String custom = cam.rtspPath.trim();
         if (!custom.isEmpty()) {
             // Eigene URL bzw. eigener Pfad aus den Kamera-Einstellungen
-            addVariant("sub", a.rtspUrlCustom(custom), true);
-            addVariant("sub", a.rtspUrlCustom(custom), false);
+            addVariant("sub", a.rtspUrlCustom(custom), true, false);
+            addVariant("sub", a.rtspUrlCustom(custom), false, false);
+            addVariant("sub", a.rtspUrlCustom(custom), true, true);
+            addVariant("sub", a.rtspUrlCustom(custom), false, true);
             firstSubIdx = 0;
         } else {
             boolean hd = !"sub".equals(Prefs.liveStream(this));
@@ -487,12 +498,16 @@ public class MainActivity extends Activity implements MotionService.Listener {
             }
             firstSubIdx = candidates.size();
             addPathVariants(a, "sub");
+            // VLC-Engine als Ersatz (verträgt mehr Reolink-Firmwares)
+            addVariant("sub", a.rtspUrlCustom("Preview_01_sub"), true, true);
+            addVariant("sub", a.rtspUrlCustom("h264Preview_01_sub"), true, true);
+            addVariant("sub", a.rtspUrlCustom("Preview_01_sub"), false, true);
             // bewährte Variante nach vorne holen (nur innerhalb der SD-Varianten bzw. als erste HD-Variante)
             String good = Prefs.sp(this).getString("rtspOk_" + cam.id, null);
             if (good != null) {
                 for (int i = 0; i < candidates.size(); i++) {
                     Variant v = candidates.get(i);
-                    if (good.equals(v.key) && "sub".equals(v.stream) && i > firstSubIdx) {
+                    if (good.equals(v.key) && "sub".equals(v.stream) && i >= firstSubIdx) {
                         candidates.remove(i);
                         candidates.add(firstSubIdx, v);
                         break;
@@ -507,18 +522,19 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void addPathVariants(ReolinkApi a, String stream) {
         for (String prefix : new String[]{"", "h264", "h265"}) {
             String url = a.rtspUrlCustom(prefix + "Preview_01_" + stream);
-            addVariant(stream, url, true);
-            addVariant(stream, url, false);
+            addVariant(stream, url, true, false);
+            addVariant(stream, url, false, false);
         }
     }
 
-    private void addVariant(String stream, String url, boolean tcp) {
+    private void addVariant(String stream, String url, boolean tcp, boolean vlc) {
         Variant v = new Variant();
         v.stream = stream;
         v.url = url;
         v.tcp = tcp;
+        v.vlc = vlc;
         // Schlüssel ohne Zugangsdaten
-        v.key = url.substring(url.indexOf('@') + 1) + (tcp ? "|tcp" : "|udp");
+        v.key = (vlc ? "vlc:" : "") + url.substring(url.indexOf('@') + 1) + (tcp ? "|tcp" : "|udp");
         candidates.add(v);
     }
 
@@ -540,6 +556,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
                     + (candIdx > 0 ? "  Variante " + (candIdx + 1) + "/" + candidates.size() : ""));
         }
 
+        playerView.setVisibility(v.vlc ? View.GONE : View.VISIBLE);
+        vlcLayout.setVisibility(v.vlc ? View.VISIBLE : View.GONE);
+        if (v.vlc) {
+            playVlc(v);
+            return;
+        }
+
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(1000, 3000, 250, 500)   // geringe Verzögerung
                 .build();
@@ -555,14 +578,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
         player.addListener(new Player.Listener() {
             @Override
-            public void onRenderedFirstFrame() {
-                gotFrame = true;
-                stopSnapFallback();
-                handler.removeCallbacks(firstFrameTimeout);
-                handler.removeCallbacks(stallCheck);
-                hideStatus();
-                if (cam != null) Prefs.sp(MainActivity.this).edit().putString("rtspOk_" + cam.id, v.key).apply();
-            }
+            public void onRenderedFirstFrame() { onFirstFrame(v); }
 
             @Override
             public void onTracksChanged(Tracks tracks) {
@@ -595,9 +611,70 @@ public class MainActivity extends Activity implements MotionService.Listener {
         handler.postDelayed(firstFrameTimeout, FIRST_FRAME_TIMEOUT_MS);
     }
 
+    /** Erstes Bild ist da – Variante merken, Ersatzbilder und Meldung weg. */
+    private void onFirstFrame(Variant v) {
+        gotFrame = true;
+        stopSnapFallback();
+        handler.removeCallbacks(firstFrameTimeout);
+        handler.removeCallbacks(stallCheck);
+        handler.removeCallbacks(retry);
+        hideStatus();
+        if (cam != null) Prefs.sp(this).edit().putString("rtspOk_" + cam.id, v.key).apply();
+    }
+
+    /** Wiedergabe über VLC (libVLC) – hardwarebeschleunigt, wenig CPU. */
+    private void playVlc(final Variant v) {
+        try {
+            if (libVlc == null) {
+                java.util.ArrayList<String> opts = new java.util.ArrayList<>();
+                opts.add("--network-caching=400");
+                opts.add("--no-stats");
+                opts.add("--no-sub-autodetect-file");
+                libVlc = new org.videolan.libvlc.LibVLC(this, opts);
+            }
+            vlcPlayer = new org.videolan.libvlc.MediaPlayer(libVlc);
+            vlcPlayer.attachViews(vlcLayout, null, false, false);
+            applyZoom();
+            org.videolan.libvlc.Media m = new org.videolan.libvlc.Media(libVlc, Uri.parse(v.url));
+            m.setHWDecoderEnabled(true, false);
+            m.addOption(":network-caching=400");
+            if (v.tcp) m.addOption(":rtsp-tcp");
+            vlcPlayer.setMedia(m);
+            m.release();
+            vlcPlayer.setVolume(Prefs.muted(this) ? 0 : 100);
+            final org.videolan.libvlc.MediaPlayer mp = vlcPlayer;
+            vlcPlayer.setEventListener(new org.videolan.libvlc.MediaPlayer.EventListener() {
+                @Override
+                public void onEvent(org.videolan.libvlc.MediaPlayer.Event ev) {
+                    if (mp != vlcPlayer) return;   // veralteter Player
+                    switch (ev.type) {
+                        case org.videolan.libvlc.MediaPlayer.Event.Vout:
+                            if (ev.getVoutCount() > 0 && !gotFrame) onFirstFrame(v);
+                            break;
+                        case org.videolan.libvlc.MediaPlayer.Event.EncounteredError:
+                            streamFailed("VLC_FEHLER");
+                            break;
+                        case org.videolan.libvlc.MediaPlayer.Event.EndReached:
+                        case org.videolan.libvlc.MediaPlayer.Event.Stopped:
+                            if (gotFrame) scheduleRetry("Verbindung unterbrochen – verbinde neu…");
+                            else streamFailed("VLC_ENDE");
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            });
+            vlcPlayer.play();
+            handler.postDelayed(firstFrameTimeout, FIRST_FRAME_TIMEOUT_MS);
+        } catch (Throwable t) {
+            // VLC nicht verfügbar (z. B. Architektur) – nächste Variante
+            streamFailed("VLC: " + t.getClass().getSimpleName());
+        }
+    }
+
     /** Stream ließ sich nicht abspielen: nächste Variante probieren oder neu verbinden. */
     private void streamFailed(String reason) {
-        if (player == null) return;
+        if (player == null && vlcPlayer == null) return;
         handler.removeCallbacks(firstFrameTimeout);
         if (gotFrame) {
             // lief schon – gleiche Variante erneut verbinden
@@ -640,6 +717,16 @@ public class MainActivity extends Activity implements MotionService.Listener {
             player = null;
         }
         playerView.setPlayer(null);
+        if (vlcPlayer != null) {
+            org.videolan.libvlc.MediaPlayer mp = vlcPlayer;
+            vlcPlayer = null;   // Events des alten Players ignorieren
+            try {
+                mp.stop();
+                mp.detachViews();
+                mp.release();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     private void scheduleRetry(String msg) {
@@ -654,6 +741,11 @@ public class MainActivity extends Activity implements MotionService.Listener {
         playerView.setResizeMode(Prefs.zoom(this)
                 ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 : AspectRatioFrameLayout.RESIZE_MODE_FIT);
+        if (vlcPlayer != null) {
+            vlcPlayer.setVideoScale(Prefs.zoom(this)
+                    ? org.videolan.libvlc.MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
+                    : org.videolan.libvlc.MediaPlayer.ScaleType.SURFACE_BEST_FIT);
+        }
     }
 
     // ------------------------------------------------------------ Kamera-Befehle

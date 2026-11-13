@@ -86,7 +86,9 @@ public class DashboardView extends LinearLayout {
                 LayoutParams lp = new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f);
                 lp.setMargins(dp(2), dp(2), dp(2), dp(2));
                 if (idx < n) {
-                    Tile t = buildTile(cams.get(idx), liveVideo && idx < MAX_LIVE);
+                    String good = Prefs.sp(getContext()).getString("rtspOk_" + cams.get(idx).id, "");
+                    boolean vlcOnly = good.startsWith("vlc:");   // ExoPlayer kann diesen Stream nicht
+                    Tile t = buildTile(cams.get(idx), liveVideo && idx < MAX_LIVE && !vlcOnly);
                     row.addView(t.root, lp);
                     tiles.add(t);
                 } else {
