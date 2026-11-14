@@ -132,7 +132,8 @@ public final class Prefs {
     public static String micSource(Context c)   { return sp(c).getString("micSource", "Automatic"); }
 
     public static boolean muted(Context c)      { return sp(c).getBoolean("muted", true); }
-    public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }
+    /** Bild füllt den Bildschirm (Ränder werden abgeschnitten) – Standard auf dem quadratischen Panel. */
+    public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", true); }
 
     public static boolean isConfigured(Context c) {
         return !cameras(c).isEmpty();

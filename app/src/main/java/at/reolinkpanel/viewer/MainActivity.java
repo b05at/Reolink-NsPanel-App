@@ -722,7 +722,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
                     if (mp != vlcPlayer) return;   // veralteter Player
                     switch (ev.type) {
                         case org.videolan.libvlc.MediaPlayer.Event.Vout:
-                            if (ev.getVoutCount() > 0 && !gotFrame) onFirstFrame(v);
+                            if (ev.getVoutCount() > 0) {
+                                applyZoom();   // Skalierung nach dem Start der Videoausgabe erneut setzen
+                                if (!gotFrame) onFirstFrame(v);
+                            }
                             break;
                         case org.videolan.libvlc.MediaPlayer.Event.EncounteredError:
                             streamFailed("VLC_FEHLER");
@@ -835,7 +838,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
      * entsprechend ein – unabhängig davon, ob die Kamera als Türklingel markiert ist.
      */
     private void probeCapabilities() {
-        if (cam == null) return;
+        // Türklingel: kein Scheinwerfer, keine Sirene, kein Schwenken – Knöpfe bleiben aus
+        if (cam == null || cam.doorbell) return;
         final ReolinkApi a = api();
         final String camId = cam.id;
         executor.execute(new Runnable() {
