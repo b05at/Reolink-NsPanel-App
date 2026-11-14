@@ -31,6 +31,8 @@ Am besten gibst du der Kamera im Router eine **feste IP-Adresse** (DHCP-Reservie
 
 Alle Versionen findest du unter [Releases](https://github.com/b05at/Reolink-NsPanel-App/releases). Jede Änderung am Code wird von GitHub Actions automatisch gebaut und als neues Release veröffentlicht.
 
+**Updates in der App:** Unter ⚙ → *Updates* zeigt die App die installierte Version, prüft auf Wunsch automatisch (alle 12 Stunden) und installiert neue Versionen direkt aus den GitHub-Releases. Ist ein Update da, wird das Zahnrad im Livebild blau und es erscheint eine Benachrichtigung. Beim ersten Mal muss „Unbekannte Apps installieren“ für die Kamera-App erlaubt werden.
+
 ## 3. Auf dem NSPanel Pro installieren
 
 Für das Panel muss ADB aktiviert sein. Eine Anleitung dazu findest du hier: <https://blakadder.com/nspanel-pro-sideload/>

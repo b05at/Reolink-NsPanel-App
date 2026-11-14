@@ -75,6 +75,7 @@ public class MotionService extends Service implements SensorEventListener {
     private Thread worker;
     private final Map<String, CamState> states = new HashMap<>();
     private long lastEventAt;
+    private long lastUpdatePoll;
     private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private String shownStatus;
 
@@ -169,6 +170,11 @@ public class MotionService extends Service implements SensorEventListener {
                     continue;
                 }
                 syncStates(cams);
+                long nowCheck = System.currentTimeMillis();
+                if (nowCheck - lastUpdatePoll > 600000) {   // alle 10 min nachsehen, ob die 12-h-Prüfung fällig ist
+                    lastUpdatePoll = nowCheck;
+                    UpdateNotifier.maybeCheck(this);
+                }
 
                 long now = System.currentTimeMillis();
                 int ok = 0, off = 0;

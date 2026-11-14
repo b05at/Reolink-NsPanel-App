@@ -313,6 +313,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
         camApi = null;   // Einstellungen könnten sich geändert haben
         gridMode = cams.size() >= 2 && "grid".equals(Prefs.viewMode(this));
         boolean event = handleEventIntent(getIntent());
+        UpdateNotifier.maybeCheck(this);
+        // Zahnrad blau markieren, wenn ein Update bereitsteht
+        findViewById(R.id.btnSettings).setActivated(UpdateNotifier.availableVersion(this) != null);
         // Klingel-Ton läuft noch: Abschalt-Zeitpunkt neu planen (onStop hat ihn entfernt)
         long left = ringAudioUntil - System.currentTimeMillis();
         if (left > 0) {

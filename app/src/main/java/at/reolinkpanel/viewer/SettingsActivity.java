@@ -19,6 +19,8 @@ import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.CheckBox;
+import android.widget.ProgressBar;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RadioGroup;
 import android.widget.TextView;
@@ -100,6 +102,7 @@ public class SettingsActivity extends Activity {
         btnAdmin.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { requestAdmin(); }
         });
+        setupUpdates();
         findViewById(R.id.btnBattery).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { batteryOptimization(); }
         });
@@ -250,6 +253,121 @@ public class SettingsActivity extends Activity {
             Toast.makeText(this, "Nicht verfügbar – per ADB aktivieren:\nadb shell dpm set-active-admin "
                     + "at.reolinkpanel.viewer/.AdminReceiver", Toast.LENGTH_LONG).show();
         }
+    }
+
+    // ------------------------------------------------------------ Updates
+
+    private Updater.Info pendingUpdate;
+    private volatile boolean updateBusy;
+
+    private void setupUpdates() {
+        ((TextView) findViewById(R.id.tvVersion)).setText("Installierte Version: " + Updater.currentVersion(this)
+                + " · Quelle: github.com/" + Updater.REPO + "/releases");
+        final CheckBox cbAuto = findViewById(R.id.cbAutoUpdate);
+        cbAuto.setChecked(UpdateNotifier.autoUpdate(this));
+        cbAuto.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton b, boolean checked) {
+                Prefs.sp(SettingsActivity.this).edit().putBoolean("autoUpdate", checked).apply();
+            }
+        });
+        findViewById(R.id.btnCheckUpdate).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { checkUpdate(); }
+        });
+        findViewById(R.id.btnInstallUpdate).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { installUpdate(); }
+        });
+        // Wurde im Hintergrund schon eine neue Version gefunden? Dann gleich prüfen und Knopf zeigen.
+        if (UpdateNotifier.availableVersion(this) != null) checkUpdate();
+    }
+
+    private void checkUpdate() {
+        if (updateBusy) return;
+        updateBusy = true;
+        final TextView tv = findViewById(R.id.tvUpdate);
+        tv.setText("Prüfe auf Updates…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String msg;
+                Updater.Info info = null;
+                try {
+                    info = Updater.check(SettingsActivity.this);
+                    Prefs.sp(SettingsActivity.this).edit()
+                            .putLong("lastUpdateCheck", System.currentTimeMillis())
+                            .putString("updateVersion", info != null ? info.version : null).apply();
+                    msg = info == null ? "Die App ist aktuell." : "Version " + info.version + " ist verfügbar.";
+                } catch (Exception e) {
+                    msg = "Prüfung fehlgeschlagen: " + e.getMessage();
+                }
+                final String m = msg;
+                final Updater.Info found = info;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        updateBusy = false;
+                        pendingUpdate = found;
+                        tv.setText(m);
+                        Button b = findViewById(R.id.btnInstallUpdate);
+                        b.setVisibility(found != null ? View.VISIBLE : View.GONE);
+                        if (found != null) b.setText("Version " + found.version + " installieren");
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void installUpdate() {
+        final Updater.Info info = pendingUpdate;
+        if (info == null || updateBusy) return;
+        if (!Updater.canInstall(this)) {
+            Toast.makeText(this, "Bitte „Unbekannte Apps installieren“ für die Kamera-App erlauben und dann erneut tippen.",
+                    Toast.LENGTH_LONG).show();
+            try { Updater.openInstallPermissionSettings(this); } catch (Exception ignored) {}
+            return;
+        }
+        updateBusy = true;
+        final TextView tv = findViewById(R.id.tvUpdate);
+        final ProgressBar pb = findViewById(R.id.pbUpdate);
+        pb.setProgress(0);
+        pb.setVisibility(View.VISIBLE);
+        tv.setText("Lade Version " + info.version + "…");
+        new Thread(new Runnable() {
+            int lastPct = -1;
+
+            @Override public void run() {
+                try {
+                    final java.io.File apk = Updater.download(SettingsActivity.this, info, new Updater.Progress() {
+                        @Override public boolean onProgress(long done, long total) {
+                            final int pct = total > 0 ? (int) (done * 100 / total) : 0;
+                            if (pct != lastPct) {
+                                lastPct = pct;
+                                runOnUiThread(new Runnable() {
+                                    @Override public void run() { pb.setProgress(pct); }
+                                });
+                            }
+                            return !isDestroyed();
+                        }
+                    });
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            updateBusy = false;
+                            pb.setVisibility(View.GONE);
+                            if (Updater.install(SettingsActivity.this, apk)) {
+                                tv.setText("Installation gestartet – bitte bestätigen.");
+                            } else {
+                                tv.setText("Auf diesem Gerät gibt es keinen Installer. Bitte per ADB installieren.");
+                            }
+                        }
+                    });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            updateBusy = false;
+                            pb.setVisibility(View.GONE);
+                            tv.setText("Download fehlgeschlagen: " + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }).start();
     }
 
     private void batteryOptimization() {
