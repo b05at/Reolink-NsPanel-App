@@ -153,6 +153,41 @@
             android:tint="@color/text" />
     </LinearLayout>
 
+    <!-- Gegensprechen: rechts unten über der Leiste -->
+    <LinearLayout
+        android:id="@+id/talkPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="76dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btnTalk"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/fab_dark"
+            android:contentDescription="Sprechen"
+            android:scaleType="center"
+            android:src="@drawable/ic_mic"
+            android:tint="@color/text" />
+
+        <TextView
+            android:id="@+id/tvTalk"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/pill"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:text="Halten"
+            android:textColor="@color/text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
     <!-- Einblendbares Steuerkreuz -->
     <LinearLayout
         android:id="@+id/ptzPanel"

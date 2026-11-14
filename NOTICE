@@ -1,0 +1,12 @@
+Kamera – Reolink-Viewer für das Sonoff NSPanel Pro
+https://github.com/b05at/Reolink-NsPanel-App
+
+Diese App enthält Code aus:
+
+- Reolink Doorbell Intercom for Kiosk Satellite (Apache-2.0)
+  Copyright 2026 patrick11994
+  https://github.com/patrick11994/ks-reolink-doorbell-intercom
+  Verwendet für das Gegensprechen: Baichuan-Anmeldung und -Verschlüsselung,
+  Talk-Sitzung, ADPCM-Kodierung und Mikrofonaufnahme
+  (Paket io.github.patrick11994.reolinkdoorbell). Lizenz und NOTICE siehe
+  third_party/ks-reolink-doorbell-intercom/.

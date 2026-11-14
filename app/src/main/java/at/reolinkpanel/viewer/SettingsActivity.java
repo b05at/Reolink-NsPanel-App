@@ -31,7 +31,8 @@ public class SettingsActivity extends Activity {
     private CheckBox cbFront, cbBoot, cbOpenBoot, cbThumbs, cbChime, cbGridLive;
     private RadioGroup rgLive, rgRec, rgTrigger;
     private LinearLayout camList;
-    private Spinner spTimeout;
+    private Spinner spTimeout, spMic;
+    private RadioGroup rgTalk;
     private CheckBox cbProxWake;
     private TextView tvScreenHint;
     private View btnAdmin;
@@ -47,6 +48,14 @@ public class SettingsActivity extends Activity {
 
         camList = findViewById(R.id.camList);
         spTimeout = findViewById(R.id.spTimeout);
+        spMic = findViewById(R.id.spMic);
+        rgTalk = findViewById(R.id.rgTalk);
+        java.util.List<String> mics = new java.util.ArrayList<>();
+        mics.add("Automatisch");
+        java.util.Collections.addAll(mics, io.github.patrick11994.reolinkdoorbell.MicCapture.CHOICES);
+        ArrayAdapter<String> micAd = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, mics);
+        micAd.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spMic.setAdapter(micAd);
         cbProxWake = findViewById(R.id.cbProxWake);
         tvScreenHint = findViewById(R.id.tvScreenHint);
         btnAdmin = findViewById(R.id.btnAdmin);
@@ -136,6 +145,12 @@ public class SettingsActivity extends Activity {
 
     private void fill() {
         cbChime.setChecked(Prefs.chime(this));
+        rgTalk.check("toggle".equals(Prefs.talkMode(this)) ? R.id.rbTalkToggle : R.id.rbTalkHold);
+        String micSrc = Prefs.micSource(this);
+        int micSel = 0;
+        String[] micChoices = io.github.patrick11994.reolinkdoorbell.MicCapture.CHOICES;
+        for (int i = 0; i < micChoices.length; i++) if (micChoices[i].equals(micSrc)) micSel = i + 1;
+        spMic.setSelection(micSel);
         int timeout = Prefs.screenTimeout(this);
         int sel = 0;
         for (int i = 0; i < TIMEOUTS.length; i++) if (TIMEOUTS[i] == timeout) sel = i;
@@ -170,6 +185,10 @@ public class SettingsActivity extends Activity {
 
         SharedPreferences.Editor e = Prefs.sp(this).edit();
         e.putBoolean("chime", cbChime.isChecked());
+        e.putString("talkMode", rgTalk.getCheckedRadioButtonId() == R.id.rbTalkToggle ? "toggle" : "hold");
+        int micPos = spMic.getSelectedItemPosition();
+        e.putString("micSource", micPos <= 0 ? "Automatic"
+                : io.github.patrick11994.reolinkdoorbell.MicCapture.CHOICES[micPos - 1]);
         e.putInt("screenTimeout", TIMEOUTS[Math.max(0, spTimeout.getSelectedItemPosition())]);
         e.putBoolean("proxWake", cbProxWake.isChecked());
         e.putBoolean("gridLive", cbGridLive.isChecked());

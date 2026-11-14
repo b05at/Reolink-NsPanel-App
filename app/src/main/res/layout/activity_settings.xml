@@ -88,6 +88,18 @@
                 <CheckBox android:id="@+id/cbChime" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Gong am Panel, wenn an der Türklingel geläutet wird" />
             </LinearLayout>
 
+            <!-- Gegensprechen -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Gegensprechen" />
+                <RadioGroup android:id="@+id/rgTalk" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <RadioButton android:id="@+id/rbTalkHold" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Gedrückt halten zum Sprechen (empfohlen, kein Echo)" />
+                    <RadioButton android:id="@+id/rbTalkToggle" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Antippen zum Ein-/Ausschalten" />
+                </RadioGroup>
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Mikrofon" />
+                <Spinner android:id="@+id/spMic" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="4dp" android:background="@drawable/field_bg" android:paddingLeft="4dp" android:popupBackground="@color/surface" android:spinnerMode="dropdown" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Hört die Kamera dich nicht, eine andere Mikrofonquelle wählen. Während du sprichst, ist der Kameraton am Panel stumm." android:textColor="@color/textDim" android:textSize="12sp" />
+            </LinearLayout>
+
             <!-- Bildschirm -->
             <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
                 <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bildschirm" />

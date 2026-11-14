@@ -48,7 +48,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private PlayerView playerView;
     private ExoPlayer player;
     private DashboardView dashboard;
-    private View controls, sidePanel, topLeft, ptzPanel;
+    private View controls, sidePanel, topLeft, ptzPanel, talkPanel;
     private TextView statusText, motionBadge, camChip;
     private ImageButton btnSound, btnZoom, btnSiren, btnPtz, btnLight, btnGrid, btnRec;
     private TextView btnStream;
@@ -89,6 +89,21 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private boolean lightOn = false;
     private boolean ptzMoving = false;
     private boolean ptzErrorShown = false;
+
+    // --- Gegensprechen (Baichuan, Code aus ks-reolink-doorbell-intercom, Apache-2.0)
+    private static final int REQ_MIC = 42;
+    private static final long TALK_IDLE_CLOSE_MS = 30000;
+    /** Kamera-ID -> unterstützt Sprechen (fehlt = noch unbekannt). */
+    private static final java.util.Map<String, Boolean> TALK_SUPPORT = new java.util.HashMap<>();
+    private final ExecutorService talkExecutor = Executors.newSingleThreadExecutor();
+    private io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk talk;
+    private io.github.patrick11994.reolinkdoorbell.MicCapture mic;
+    private boolean talking;
+    private ImageButton btnTalk;
+    private TextView tvTalk;
+    private final Runnable talkIdleClose = new Runnable() {
+        @Override public void run() { closeTalk(); }
+    };
 
     // --- Bildschirm-Timeout
     private boolean screenReleased;    // Display darf ausgeschaltet werden
@@ -134,6 +149,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
         sidePanel = findViewById(R.id.sidePanel);
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
+        talkPanel = findViewById(R.id.talkPanel);
+        btnTalk = findViewById(R.id.btnTalk);
+        tvTalk = findViewById(R.id.tvTalk);
         snapView = findViewById(R.id.snapView);
         vlcLayout = findViewById(R.id.vlcLayout);
         statusText = findViewById(R.id.status);
@@ -223,6 +241,26 @@ public class MainActivity extends Activity implements MotionService.Listener {
         dpad.setListener(new DPadView.Listener() {
             @Override public void onDirection(String op) { ptz(op); }
         });
+        btnTalk.setOnTouchListener(new View.OnTouchListener() {
+            @SuppressLint("ClickableViewAccessibility")
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                boolean hold = !"toggle".equals(Prefs.talkMode(MainActivity.this));
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        if (hold) talkDown();
+                        else if (talking) talkUp(); else talkDown();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        if (hold) talkUp();
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
         holdButton(findViewById(R.id.btnZoomIn), "ZoomInc");
         holdButton(findViewById(R.id.btnZoomOut), "ZoomDec");
         dashboard.setOnTileClick(new DashboardView.OnTileClick() {
@@ -276,6 +314,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         AppState.liveVisible = false;
         MotionService.clearListener(this);
         if (sirenOn) setSiren(false);   // Sirene nie unbeaufsichtigt weiterlaufen lassen
+        closeTalk();                    // Mikrofon nie unbeaufsichtigt offen lassen
         setPtzVisible(false);           // stoppt auch laufende Schwenks
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
@@ -293,6 +332,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     protected void onDestroy() {
         executor.shutdown();   // laufende Befehle (z. B. Stopp) noch abschließen
         if (libVlc != null) { libVlc.release(); libVlc = null; }
+        talkExecutor.shutdown();
         super.onDestroy();
     }
 
@@ -327,6 +367,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void selectCam(Cam c) {
         if (cam != null && !cam.id.equals(c.id)) {
+            closeTalk();
             if (sirenOn) setSiren(false);
             setPtzVisible(false);
         }
@@ -353,6 +394,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void showGrid() {
         if (cams.size() < 2) return;
+        closeTalk();
         if (sirenOn) setSiren(false);
         setPtzVisible(false);
         returnToGrid = false;
@@ -395,7 +437,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
             dashboard.setVisibility(View.GONE);
             playerView.setVisibility(View.VISIBLE);
             startLive();
-            if (hasCam) probeCapabilities();
+            if (hasCam) {
+                probeCapabilities();
+                probeTalk();
+            }
         }
         updateLight();
         setControls(controls.getVisibility() == View.VISIBLE);
@@ -914,6 +959,178 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
     }
 
+    // ------------------------------------------------------------ Gegensprechen
+
+    private boolean talkAllowed() {
+        if (gridMode || cam == null) return false;
+        Boolean ok = TALK_SUPPORT.get(cam.id);
+        return ok == null || ok;
+    }
+
+    /** Fragt einmal pro Kamera per Baichuan (Port 9000) nach, ob sie Sprechen unterstützt. */
+    private void probeTalk() {
+        if (cam == null || TALK_SUPPORT.containsKey(cam.id)) {
+            setControls(controls.getVisibility() == View.VISIBLE);
+            return;
+        }
+        final Cam c = cam;
+        talkExecutor.execute(new Runnable() {
+            @Override public void run() {
+                Boolean ok;
+                try {
+                    String fmt = io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk
+                            .probe(c.host.trim(), 9000, c.user.trim(), c.pass, 0);
+                    ok = fmt != null;
+                } catch (Exception e) {
+                    ok = null;   // nicht erreichbar – Knopf zeigen, Fehler erst beim Sprechen melden
+                }
+                final Boolean result = ok;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (result != null) TALK_SUPPORT.put(c.id, result);
+                        if (!isDestroyed()) setControls(controls.getVisibility() == View.VISIBLE);
+                    }
+                });
+            }
+        });
+    }
+
+    private boolean hasMicPermission() {
+        return checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Mikrofon öffnen und zur Kamera sprechen. */
+    private void talkDown() {
+        if (cam == null) return;
+        if (!hasMicPermission()) {
+            requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+            return;
+        }
+        handler.removeCallbacks(talkIdleClose);
+        handler.removeCallbacks(hideControls);
+        if (talk == null) {
+            final String camId = cam.id;
+            talk = new io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk(
+                    cam.host.trim(), 9000, cam.user.trim(), cam.pass, 0,
+                    new io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk.Listener() {
+                        @Override public void onTalkState(final String state) {
+                            runOnUiThread(new Runnable() {
+                                @Override public void run() { onTalkState(camId, state); }
+                            });
+                        }
+                    });
+            talk.start();   // sendet Stille, bis das Mikrofon Ton liefert
+            tvTalk.setText("Verbinde…");
+        }
+        if (mic == null) {
+            mic = new io.github.patrick11994.reolinkdoorbell.MicCapture(talk, Prefs.micSource(this), "Automatic", false,
+                    new io.github.patrick11994.reolinkdoorbell.MicCapture.Listener() {
+                        @Override public void onMicState(final String state) {
+                            if (state.startsWith("live")) return;
+                            runOnUiThread(new Runnable() {
+                                @Override public void run() {
+                                    Toast.makeText(MainActivity.this, "Mikrofon: " + state, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
+                    });
+        }
+        talking = true;
+        muteLive(true);   // Kameraton aus, damit die Kamera sich nicht selbst hört
+        updateTalkUi();
+    }
+
+    /** Mikrofon schließen; die Sitzung bleibt kurz offen, damit der nächste Druck sofort klappt. */
+    private void talkUp() {
+        if (!talking) return;
+        talking = false;
+        final io.github.patrick11994.reolinkdoorbell.MicCapture m = mic;
+        mic = null;
+        if (m != null) {
+            talkExecutor.execute(new Runnable() {
+                @Override public void run() { m.release(); }
+            });
+        }
+        if (talk != null) talk.clear();
+        muteLive(false);
+        updateTalkUi();
+        handler.removeCallbacks(talkIdleClose);
+        if (talk != null) handler.postDelayed(talkIdleClose, TALK_IDLE_CLOSE_MS);
+        showControls();
+    }
+
+    /** Gespräch ganz beenden (Kamera-Lautsprecher wieder frei). */
+    private void closeTalk() {
+        handler.removeCallbacks(talkIdleClose);
+        if (talking) {
+            talking = false;
+            muteLive(false);
+        }
+        final io.github.patrick11994.reolinkdoorbell.MicCapture m = mic;
+        final io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk t = talk;
+        mic = null;
+        talk = null;
+        if (m != null || t != null) {
+            talkExecutor.execute(new Runnable() {
+                @Override public void run() {
+                    if (m != null) m.release();
+                    if (t != null) t.stop();
+                }
+            });
+        }
+        updateTalkUi();
+    }
+
+    private void onTalkState(String camId, String state) {
+        if (isDestroyed()) return;
+        if ("open".equals(state)) {
+            updateTalkUi();
+            return;
+        }
+        if (state.startsWith("talk refused")) {
+            TALK_SUPPORT.put(camId, false);
+            Toast.makeText(this, "Diese Kamera unterstützt Sprechen über die App nicht.", Toast.LENGTH_LONG).show();
+            closeTalk();
+            setControls(controls.getVisibility() == View.VISIBLE);
+        } else if (state.startsWith("talk failed") || state.startsWith("talk ended")) {
+            String why = state.substring(state.indexOf(':') + 1).trim();
+            Toast.makeText(this, "Gegensprechen beendet: " + why, Toast.LENGTH_LONG).show();
+            closeTalk();
+        }
+    }
+
+    private void updateTalkUi() {
+        if (talking) {
+            btnTalk.setBackgroundResource(R.drawable.fab_talk_on);
+            btnTalk.setImageTintList(ColorStateList.valueOf(0xFF000000));
+            tvTalk.setText("Sprechen…");
+        } else {
+            btnTalk.setBackgroundResource(R.drawable.fab_dark);
+            btnTalk.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+            tvTalk.setText("toggle".equals(Prefs.talkMode(this)) ? "Sprechen" : "Halten");
+        }
+        setControls(controls.getVisibility() == View.VISIBLE);
+    }
+
+    /** Kameraton während des Sprechens stumm (verhindert Rückkopplung). */
+    private void muteLive(boolean mute) {
+        float vol = mute || Prefs.muted(this) ? 0f : 1f;
+        if (player != null) player.setVolume(vol);
+        if (vlcPlayer != null) vlcPlayer.setVolume(vol > 0 ? 100 : 0);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQ_MIC) return;
+        if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Mikrofon erlaubt – jetzt Sprechen-Knopf benutzen.", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Ohne Mikrofon-Berechtigung ist kein Gegensprechen möglich.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     // ------------------------------------------------------------ Sirene
 
     private void confirmSiren() {
@@ -1011,7 +1228,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void goToSleep() {
         if (!started) return;
         // Nicht während Bewegung, Sirene oder Schwenken
-        if (MotionService.motionActive || sirenOn || ptzPanel.getVisibility() == View.VISIBLE) {
+        if (MotionService.motionActive || sirenOn || talk != null || ptzPanel.getVisibility() == View.VISIBLE) {
             resetSleepTimer();
             return;
         }
@@ -1096,6 +1313,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         controls.setVisibility(show ? View.VISIBLE : View.GONE);
         topLeft.setVisibility(show ? View.VISIBLE : View.GONE);
         sidePanel.setVisibility(show || sirenOn ? View.VISIBLE : View.GONE);
+        talkPanel.setVisibility((show || talking) && talkAllowed() ? View.VISIBLE : View.GONE);
         if (!show && ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
     }
 
@@ -1118,7 +1336,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void showControls() {
         setControls(true);
         handler.removeCallbacks(hideControls);
-        if (ptzPanel.getVisibility() != View.VISIBLE && !gridMode) {
+        if (ptzPanel.getVisibility() != View.VISIBLE && !gridMode && !talking) {
             handler.postDelayed(hideControls, CONTROLS_TIMEOUT_MS);
         }
     }

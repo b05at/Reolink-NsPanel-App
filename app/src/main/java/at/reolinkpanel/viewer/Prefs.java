@@ -126,6 +126,11 @@ public final class Prefs {
     /** Ausgeschaltetes Display per Handbewegung (Näherungssensor) einschalten. */
     public static boolean proxWake(Context c)   { return sp(c).getBoolean("proxWake", true); }
 
+    /** Gegensprechen: "hold" = gedrückt halten, "toggle" = antippen zum Ein-/Ausschalten. */
+    public static String talkMode(Context c)    { return sp(c).getString("talkMode", "hold"); }
+    /** Mikrofonquelle: "Automatic" oder ein Eintrag aus MicCapture.CHOICES. */
+    public static String micSource(Context c)   { return sp(c).getString("micSource", "Automatic"); }
+
     public static boolean muted(Context c)      { return sp(c).getBoolean("muted", true); }
     public static boolean zoom(Context c)       { return sp(c).getBoolean("zoom", false); }
 

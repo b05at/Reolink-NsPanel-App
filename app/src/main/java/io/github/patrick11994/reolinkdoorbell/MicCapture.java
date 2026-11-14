@@ -1,0 +1,176 @@
+// SPDX-License-Identifier: Apache-2.0
+// Modified for the Kamera app (b05at/Reolink-NsPanel-App): made public for use outside this package,
+// thread priority set inline instead of via AudioRenderer.
+package io.github.patrick11994.reolinkdoorbell;
+
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.os.Build;
+import io.github.patrick11994.reolinkdoorbell.talk.Downsampler;
+import io.github.patrick11994.reolinkdoorbell.talk.TalkChannel;
+
+/**
+ * The panel microphone into the talk channel, 10 ms at a time. Panels differ in which source really delivers audio:
+ * on an RK3576 panel only CAMCORDER does, while MIC, VOICE_COMMUNICATION and VOICE_RECOGNITION go silent. Silence
+ * cannot tell a dead source apart, because Rockchip drivers also turn a quiet room into exact zeros, so the source
+ * is picked once per call and kept: the one from the Microphone setting, or in Automatic the first that opens,
+ * CAMCORDER first. The rate comes first, because the doorbell talks at 16 kHz (8 kHz over ONVIF): on an Echo Show a
+ * 48 kHz capture opens fine and delivers loud noise, while 16 kHz is clean, so Automatic tries 16, then 48, then
+ * 8 kHz, and the Microphone sample rate setting can fix one. Android's echo canceller is attached where the device has one (it
+ * mostly works on Voice communication, in call mode). Records only while the microphone is on.
+ */
+public final class MicCapture {
+    public interface Listener {
+        void onMicState(String state);
+    }
+
+    /** The Microphone setting's options, in Automatic's order. */
+    public static final String[] CHOICES = {"Camcorder", "Voice communication", "Microphone", "Voice recognition", "Unprocessed"};
+    private static final int[] SOURCES = {
+        MediaRecorder.AudioSource.CAMCORDER,
+        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+        MediaRecorder.AudioSource.MIC,
+        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        Build.VERSION.SDK_INT >= 24 ? MediaRecorder.AudioSource.UNPROCESSED : MediaRecorder.AudioSource.DEFAULT,
+    };
+    /** The Microphone sample rate setting's options after Automatic, and Automatic's order. */
+    static final String[] RATE_CHOICES = {"16000 Hz", "48000 Hz", "8000 Hz"};
+    private static final int[] RATES = {16000, 48000, 8000};
+
+    private final TalkChannel talk;
+    private final Listener listener;
+    private final String choice;
+    private final int[] rates;
+    private volatile boolean running = true;
+    private volatile boolean muted;  // push to talk: open, but nothing goes to the door until the button is held
+    private final Thread thread;
+
+    /** choice is the Microphone setting (one of CHOICES, or Automatic), rateChoice the sample rate one (one of RATE_CHOICES, or Automatic). */
+    public MicCapture(TalkChannel talk, String choice, String rateChoice, boolean muted, Listener listener) {
+        this.talk = talk;
+        this.muted = muted;
+        this.choice = choice;
+        this.rates = rates(rateChoice);
+        this.listener = listener;
+        thread = new Thread(this::run, "reolink-mic");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /** Push to talk: true drops the microphone's audio instead of sending it, false sends it again. */
+    public void setMuted(boolean muted) {
+        this.muted = muted;
+    }
+
+    public void release() {
+        running = false;
+        thread.interrupt();
+        try {
+            thread.join(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void run() {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
+        } catch (RuntimeException refused) {
+            // Runs at the default priority.
+        }
+        AudioRecord recorder = null;
+        int rate = 0;
+        String opened = null;
+        for (int i = 0; i < SOURCES.length && recorder == null; i++) {
+            if (!choice.equals("Automatic") && !choice.equals(CHOICES[i])) continue;
+            for (int r : rates) {
+                recorder = open(SOURCES[i], r);
+                if (recorder != null) {
+                    rate = r;
+                    opened = CHOICES[i];
+                    break;
+                }
+            }
+        }
+        if (recorder == null) {
+            listener.onMicState("no microphone (" + choice + ", " + (rates.length == 1 ? rates[0] + " Hz" : "any rate") + ")");
+            return;
+        }
+        AcousticEchoCanceler echo = null;
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                echo = AcousticEchoCanceler.create(recorder.getAudioSessionId());
+                if (echo != null) echo.setEnabled(true);
+            }
+        } catch (RuntimeException unsupported) {
+            echo = null;
+        }
+        try {
+            recorder.startRecording();
+            if (recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                listener.onMicState("the microphone is in use elsewhere");
+                return;
+            }
+            listener.onMicState("live, " + opened + " " + rate + " Hz, echo canceller " + (echo != null && echo.getEnabled() ? "on" : "none"));
+            int target = talk.rate();
+            // Down to the channel's rate, or up from a slower microphone (8 kHz forced in the settings, 16 kHz talk).
+            int up = rate < target && target % rate == 0 ? target / rate : 1;
+            Downsampler downsampler = new Downsampler(rate * up, target);
+            short[] chunk = new short[rate / 100];  // 10 ms
+            short[] upChunk = new short[chunk.length * up];
+            short[] out = new short[upChunk.length];
+            int last = 0;
+            while (running) {
+                int read = recorder.read(chunk, 0, chunk.length);
+                if (read < 0) {
+                    listener.onMicState("microphone read error " + read);
+                    return;
+                }
+                int n;
+                if (up == 1) {
+                    n = downsampler.process(chunk, read, out, 0);
+                } else {
+                    for (int i = 0; i < read; i++) {  // linear interpolation; 8 kHz audio has nothing above 4 kHz to lose
+                        for (int k = 0; k < up; k++) upChunk[i * up + k] = (short) (last + (chunk[i] - last) * (k + 1) / up);
+                        last = chunk[i];
+                    }
+                    n = downsampler.process(upChunk, read * up, out, 0);
+                }
+                if (n > 0 && !muted) talk.write(out, n);
+            }
+        } catch (RuntimeException error) {
+            if (running) listener.onMicState("microphone: " + error);
+        } finally {
+            try {
+                recorder.stop();
+            } catch (RuntimeException ignored) {
+                // Not started.
+            }
+            if (echo != null) echo.release();
+            recorder.release();
+            talk.clear();
+        }
+    }
+
+    private static int[] rates(String rateChoice) {
+        for (int i = 0; i < RATE_CHOICES.length; i++) {
+            if (RATE_CHOICES[i].equals(rateChoice)) return new int[] {RATES[i]};
+        }
+        return RATES;
+    }
+
+    private static AudioRecord open(int source, int rate) {
+        try {
+            int minimum = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            if (minimum <= 0) return null;
+            AudioRecord recorder = new AudioRecord(source, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minimum, rate / 10 * 2));
+            if (recorder.getState() == AudioRecord.STATE_INITIALIZED) return recorder;
+            recorder.release();
+        } catch (RuntimeException unsupported) {
+            // Try the next rate or source.
+        }
+        return null;
+    }
+}
