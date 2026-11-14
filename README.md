@@ -6,7 +6,7 @@ Schlanke Android-App (ab Android 8.0) für Reolink-Kameras und die **Reolink Vid
 - **Aufnahmen** von der SD-Karte nach Tag durchblättern und abspielen (mit Suchleiste und Vorschaubildern)
 - **Bewegungserkennung**: Bei Bewegung (wahlweise nur Personen bzw. Personen + Fahrzeuge) schaltet sich das Display ein und das Livebild erscheint
 - **Mehrere Kameras**: Kamera oben links wählen oder alle in der **Übersicht** (Raster) anzeigen
-- **Türklingel**: Beim Läuten schaltet sich der Bildschirm ein, das Bild der Klingel erscheint und das Panel gongt
+- **Türklingel**: Beim Läuten schaltet sich der Bildschirm ein, das Bild der Klingel erscheint und das Panel gongt; der Ton der Klingel ist dann automatisch 1 Minute lang eingeschaltet
 - **Gegensprechen** zur Kamera bzw. Türklingel (gedrückt halten oder antippen)
 - **Scheinwerfer** ein-/ausschalten
 - **Schwenken/Neigen/Zoom** über ein einblendbares Steuerkreuz

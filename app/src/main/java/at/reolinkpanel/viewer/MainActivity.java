@@ -105,6 +105,17 @@ public class MainActivity extends Activity implements MotionService.Listener {
         @Override public void run() { closeTalk(); }
     };
 
+    // --- Ton beim Klingeln automatisch für 1 Minute an
+    private static final long RING_AUDIO_MS = 60000;
+    private long ringAudioUntil;
+    private final Runnable ringAudioEnd = new Runnable() {
+        @Override public void run() {
+            ringAudioUntil = 0;
+            applyVolume();
+            updateButtons();
+        }
+    };
+
     // --- Bildschirm-Timeout
     private boolean screenReleased;    // Display darf ausgeschaltet werden
 
@@ -182,10 +193,12 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
         btnSound.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                boolean muted = !Prefs.muted(MainActivity.this);
-                Prefs.sp(MainActivity.this).edit().putBoolean("muted", muted).apply();
-                if (player != null) player.setVolume(muted ? 0f : 1f);
-                if (vlcPlayer != null) vlcPlayer.setVolume(muted ? 0 : 100);
+                // Antippen schaltet um, was gerade zu hören ist (auch den Klingel-Ton)
+                boolean nowOn = audioOn();
+                handler.removeCallbacks(ringAudioEnd);
+                ringAudioUntil = 0;
+                Prefs.sp(MainActivity.this).edit().putBoolean("muted", nowOn).apply();
+                applyVolume();
                 updateButtons();
                 showControls();
             }
@@ -300,6 +313,15 @@ public class MainActivity extends Activity implements MotionService.Listener {
         camApi = null;   // Einstellungen könnten sich geändert haben
         gridMode = cams.size() >= 2 && "grid".equals(Prefs.viewMode(this));
         boolean event = handleEventIntent(getIntent());
+        // Klingel-Ton läuft noch: Abschalt-Zeitpunkt neu planen (onStop hat ihn entfernt)
+        long left = ringAudioUntil - System.currentTimeMillis();
+        if (left > 0) {
+            handler.removeCallbacks(ringAudioEnd);
+            handler.postDelayed(ringAudioEnd, left);
+        } else {
+            ringAudioUntil = 0;
+        }
+        updateButtons();
         MotionService.setListener(this);
         applyMode();
         applyMotion(MotionService.motionActive, MotionService.activeCamId, MotionService.activeRing);
@@ -362,6 +384,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
         if (gridMode) returnToGrid = true;
         gridMode = false;
         selectCam(c);
+        if (i.getBooleanExtra(MotionService.EXTRA_RING, false)) {
+            i.removeExtra(MotionService.EXTRA_RING);
+            startRingAudio();
+        }
         return true;
     }
 
@@ -480,6 +506,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 if (active && ring && camId != null && (gridMode || cam == null || !camId.equals(cam.id))) {
                     switchToCam(camId, false);
                 }
+                if (active && ring) startRingAudio();
                 if (active) screenReleased = false;
                 applyMotion(active, camId, ring);
                 // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
@@ -613,7 +640,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 .setBufferDurationsMs(1000, 3000, 250, 500)   // geringe Verzögerung
                 .build();
         player = new ExoPlayer.Builder(this).setLoadControl(loadControl).build();
-        player.setVolume(Prefs.muted(this) ? 0f : 1f);
+        player.setVolume(audioOn() && !talking ? 1f : 0f);
         playerView.setPlayer(player);
         applyZoom();
 
@@ -687,7 +714,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             if (v.tcp) m.addOption(":rtsp-tcp");
             vlcPlayer.setMedia(m);
             m.release();
-            vlcPlayer.setVolume(Prefs.muted(this) ? 0 : 100);
+            vlcPlayer.setVolume(audioOn() && !talking ? 100 : 0);
             final org.videolan.libvlc.MediaPlayer mp = vlcPlayer;
             vlcPlayer.setEventListener(new org.videolan.libvlc.MediaPlayer.EventListener() {
                 @Override
@@ -1115,7 +1142,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     /** Kameraton während des Sprechens stumm (verhindert Rückkopplung). */
     private void muteLive(boolean mute) {
-        float vol = mute || Prefs.muted(this) ? 0f : 1f;
+        float vol = mute || !audioOn() ? 0f : 1f;
         if (player != null) player.setVolume(vol);
         if (vlcPlayer != null) vlcPlayer.setVolume(vol > 0 ? 100 : 0);
     }
@@ -1341,8 +1368,26 @@ public class MainActivity extends Activity implements MotionService.Listener {
         }
     }
 
+    /** Ton an: dauerhaft eingeschaltet oder gerade wegen Klingeln (1 Minute). */
+    private boolean audioOn() {
+        return !Prefs.muted(this) || System.currentTimeMillis() < ringAudioUntil;
+    }
+
+    private void applyVolume() {
+        muteLive(talking);
+    }
+
+    /** Es hat geläutet: Ton für 1 Minute einschalten (ändert die gespeicherte Einstellung nicht). */
+    private void startRingAudio() {
+        ringAudioUntil = System.currentTimeMillis() + RING_AUDIO_MS;
+        handler.removeCallbacks(ringAudioEnd);
+        handler.postDelayed(ringAudioEnd, RING_AUDIO_MS);
+        applyVolume();
+        updateButtons();
+    }
+
     private void updateButtons() {
-        boolean muted = Prefs.muted(this);
+        boolean muted = !audioOn();
         btnSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
         btnSound.setActivated(!muted);
         boolean hd = !"sub".equals(Prefs.liveStream(this));
