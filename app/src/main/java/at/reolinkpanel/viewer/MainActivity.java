@@ -1016,7 +1016,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
                     new io.github.patrick11994.reolinkdoorbell.baichuan.BaichuanTalk.Listener() {
                         @Override public void onTalkState(final String state) {
                             runOnUiThread(new Runnable() {
-                                @Override public void run() { onTalkState(camId, state); }
+                                @Override public void run() { handleTalkState(camId, state); }
                             });
                         }
                     });
@@ -1082,7 +1082,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         updateTalkUi();
     }
 
-    private void onTalkState(String camId, String state) {
+    private void handleTalkState(String camId, String state) {
         if (isDestroyed()) return;
         if ("open".equals(state)) {
             updateTalkUi();
