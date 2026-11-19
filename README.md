@@ -8,6 +8,7 @@ Schlanke Android-App (ab Android 8.0) für Reolink-Kameras und die **Reolink Vid
 - **Mehrere Kameras**: Kamera oben links wählen oder alle in der **Übersicht** (Raster) anzeigen
 - **Türklingel**: Beim Läuten schaltet sich der Bildschirm ein, das Bild der Klingel erscheint und das Panel gongt; der Ton der Klingel ist dann automatisch 1 Minute lang eingeschaltet
 - **Gegensprechen** zur Kamera bzw. Türklingel (gedrückt halten oder antippen)
+- **Türschloss** per Webhook öffnen (z. B. Shelly) und eigene **Webhook-Knöpfe** mit wählbarem Symbol
 - **Scheinwerfer** ein-/ausschalten
 - **Schwenken/Neigen/Zoom** über ein einblendbares Steuerkreuz
 - **Sirene** der Kamera per Knopf auslösen (mit Sicherheitsabfrage, schaltet sich automatisch ab)
@@ -77,6 +78,18 @@ Unter ⚙ → *Kameras & Türklingeln* beliebig viele Kameras anlegen. Pro Kamer
 
 Die Reolink-API liefert keine Vorschaubilder zu Aufnahmen. Die App speichert deshalb zu Beginn jeder Bewegung ein kleines Kamerabild (320×180) und ordnet es der passenden Aufnahme zu. Aufnahmen, die bereits abgespielt wurden, bekommen ein Bild aus dem Video. Aufnahmen von vor der Installation bzw. aus Zeiten, in denen das Panel aus war, zeigen ein Platzhalter-Symbol. Die Bilder werden 3 Wochen aufbewahrt.
 
+## Türschloss & Webhook-Knöpfe
+
+- **Türschloss**: ⚙ → Kamera antippen → *Türschloss (Webhook)*. Die URL wird beim Tippen auf das Schloss-Symbol aufgerufen (GET oder POST, optional mit Rückfrage).
+  - Shelly Gen2/Plus: `http://IP/rpc/Switch.Set?id=0&on=true&toggle_after=3`
+  - Shelly Gen1: `http://IP/relay/0?turn=on&timer=3`
+  - Mit Passwort (Basic-Auth): `http://benutzer:passwort@IP/…`
+- **Webhook-Knöpfe**: ⚙ → *Webhook-Knöpfe* → hinzufügen. Name, Symbol (12 zur Auswahl), URL, GET/POST, optional nur bei einer bestimmten Kamera. Die Knöpfe erscheinen rechts im Livebild (bei mehr als 3 über „⋯“).
+
+## Klingel-Oberfläche
+
+Beim Läuten erscheint unten eine eigene Leiste mit großen Knöpfen: **Sprechen** (halten), **Tür öffnen** (wenn ein Schloss eingetragen ist), **Ton** und **Fertig**. Der Ton ist dabei automatisch 1 Minute an.
+
 ## Gegensprechen
 
 Der Mikrofon-Knopf rechts unten im Livebild spricht zur Kamera bzw. Türklingel, über Reolinks eigenes Protokoll (Baichuan, Port 9000), so wie die Reolink-App. Verzögerung ca. 1 Sekunde.
@@ -90,6 +103,8 @@ Der Mikrofon-Knopf rechts unten im Livebild spricht zur Kamera bzw. Türklingel,
 Der Gegensprech-Code stammt aus [ks-reolink-doorbell-intercom](https://github.com/patrick11994/ks-reolink-doorbell-intercom) von patrick11994 (Apache-2.0), siehe `NOTICE` und `third_party/`.
 
 ## Bildschirm
+
+Alle Einstellungsseiten haben rechts eine breite Scrollleiste: ziehen oder antippen, um schnell zu springen.
 
 Unter ⚙ → *Bildschirm*:
 

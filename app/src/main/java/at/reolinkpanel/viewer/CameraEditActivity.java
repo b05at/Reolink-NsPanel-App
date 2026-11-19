@@ -18,8 +18,9 @@ public class CameraEditActivity extends Activity {
 
     public static final String EXTRA_ID = "camId";
 
-    private EditText etName, etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath;
-    private CheckBox cbHttps, cbDoorbell, cbWake;
+    private EditText etName, etHost, etUser, etPass, etHttpPort, etRtspPort, etRtspPath, etLockUrl, etLockBody;
+    private CheckBox cbHttps, cbDoorbell, cbWake, cbLockConfirm;
+    private android.widget.RadioGroup rgLockMethod;
     private TextView tvTest;
     private Cam cam;
     private boolean isNew;
@@ -40,6 +41,14 @@ public class CameraEditActivity extends Activity {
         cbDoorbell = findViewById(R.id.cbDoorbell);
         cbWake = findViewById(R.id.cbWake);
         tvTest = findViewById(R.id.tvTest);
+        etLockUrl = findViewById(R.id.etLockUrl);
+        etLockBody = findViewById(R.id.etLockBody);
+        cbLockConfirm = findViewById(R.id.cbLockConfirm);
+        rgLockMethod = findViewById(R.id.rgLockMethod);
+        ((ScrollRail) findViewById(R.id.scrollRail)).attach((android.widget.ScrollView) findViewById(R.id.scroll));
+        findViewById(R.id.btnLockTest).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { testLock(); }
+        });
 
         String id = getIntent().getStringExtra(EXTRA_ID);
         cam = Prefs.camera(this, id);
@@ -81,6 +90,10 @@ public class CameraEditActivity extends Activity {
         etRtspPath.setText(cam.rtspPath);
         cbDoorbell.setChecked(cam.doorbell);
         cbWake.setChecked(cam.wake);
+        etLockUrl.setText(cam.lockUrl);
+        etLockBody.setText(cam.lockBody);
+        cbLockConfirm.setChecked(cam.lockConfirm);
+        rgLockMethod.check("POST".equalsIgnoreCase(cam.lockMethod) ? R.id.rbLockPost : R.id.rbLockGet);
     }
 
     private Cam read() {
@@ -96,6 +109,10 @@ public class CameraEditActivity extends Activity {
         c.rtspPath = text(etRtspPath);
         c.doorbell = cbDoorbell.isChecked();
         c.wake = cbWake.isChecked();
+        c.lockUrl = text(etLockUrl);
+        c.lockBody = etLockBody.getText().toString();
+        c.lockConfirm = cbLockConfirm.isChecked();
+        c.lockMethod = rgLockMethod.getCheckedRadioButtonId() == R.id.rbLockPost ? "POST" : "GET";
         return c;
     }
 
@@ -135,6 +152,38 @@ public class CameraEditActivity extends Activity {
                 })
                 .setNegativeButton("Abbrechen", null)
                 .show();
+    }
+
+    /** Schloss-Webhook testweise auslösen. */
+    private void testLock() {
+        final String url = text(etLockUrl);
+        final String method = rgLockMethod.getCheckedRadioButtonId() == R.id.rbLockPost ? "POST" : "GET";
+        final String body = etLockBody.getText().toString();
+        final TextView tv = findViewById(R.id.tvLockTest);
+        if (url.isEmpty()) { tv.setText("Bitte zuerst eine URL eintragen."); return; }
+        tv.setTextColor(getColor(R.color.textDim));
+        tv.setText("Sende…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String msg;
+                boolean ok = false;
+                try {
+                    int code = Webhook.call(url, method, body);
+                    ok = code >= 200 && code < 300;
+                    msg = (ok ? "✓ " : "⚠ ") + Webhook.describe(code);
+                } catch (Exception e) {
+                    msg = "⚠ Nicht erreichbar: " + e.getMessage();
+                }
+                final String m = msg;
+                final boolean good = ok;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        tv.setTextColor(getColor(good ? R.color.accent : R.color.warn));
+                        tv.setText(m);
+                    }
+                });
+            }
+        }).start();
     }
 
     private void test() {

@@ -43,18 +43,24 @@
             android:textColor="#000000" />
     </LinearLayout>
 
-    <ScrollView
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        android:layout_weight="1">
+
+    <ScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingLeft="10dp"
-            android:paddingRight="10dp"
+            android:paddingRight="32dp"
             android:paddingBottom="16dp">
 
             <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp">
@@ -101,6 +107,22 @@
             </LinearLayout>
 
             <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Türschloss (Webhook)" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="URL, die das Schloss öffnet – z. B. ein Shelly-Relais. Leer = kein Schloss.\nShelly Gen2/Plus: http://IP/rpc/Switch.Set?id=0&amp;on=true&amp;toggle_after=3\nShelly Gen1: http://IP/relay/0?turn=on&amp;timer=3\nMit Passwort: http://benutzer:passwort@IP/…" android:textColor="@color/textDim" android:textSize="12sp" />
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="URL" />
+                <EditText android:id="@+id/etLockUrl" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="http://192.168.1.30/rpc/Switch.Set?id=0&amp;on=true&amp;toggle_after=3" android:inputType="textUri" />
+                <RadioGroup android:id="@+id/rgLockMethod" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <RadioButton android:id="@+id/rbLockGet" style="@style/Option" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginRight="16dp" android:text="GET" />
+                    <RadioButton android:id="@+id/rbLockPost" style="@style/Option" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="POST" />
+                </RadioGroup>
+                <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Inhalt bei POST (optional, z. B. JSON)" />
+                <EditText android:id="@+id/etLockBody" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text" />
+                <CheckBox android:id="@+id/cbLockConfirm" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Vor dem Öffnen nachfragen" />
+                <Button android:id="@+id/btnLockTest" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/chip" android:text="Schloss jetzt öffnen (Test)" />
+                <TextView android:id="@+id/tvLockTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/textDim" android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
                 <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Erweitert" />
                 <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Eigener RTSP-Pfad oder komplette RTSP-URL (leer = automatisch)" />
                 <EditText android:id="@+id/etRtspPath" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. h264Preview_01_sub oder rtsp://…" android:inputType="textUri" android:imeOptions="actionDone" />
@@ -109,4 +131,14 @@
             <Button android:id="@+id/btnDelete" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/chip" android:text="Kamera entfernen" android:textColor="@color/motion" />
         </LinearLayout>
     </ScrollView>
+
+        <!-- breite, greifbare Scrollleiste -->
+        <at.reolinkpanel.viewer.ScrollRail
+            android:id="@+id/scrollRail"
+            android:layout_width="30dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+    </FrameLayout>
 </LinearLayout>

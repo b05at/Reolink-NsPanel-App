@@ -43,6 +43,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".WebhookEditActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".CameraEditActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

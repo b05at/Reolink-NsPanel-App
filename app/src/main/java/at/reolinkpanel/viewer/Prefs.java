@@ -84,6 +84,30 @@ public final class Prefs {
         return "c" + (max + 1);
     }
 
+    // ------------------------------------------------------------ Webhook-Knöpfe
+
+    public static List<Webhook> webhooks(Context c) {
+        return Webhook.listFromJson(sp(c).getString("webhooks", null));
+    }
+
+    public static void saveWebhooks(Context c, List<Webhook> list) {
+        sp(c).edit().putString("webhooks", Webhook.listToJson(list)).commit();
+    }
+
+    public static Webhook webhook(Context c, String id) {
+        if (id == null) return null;
+        for (Webhook w : webhooks(c)) if (id.equals(w.id)) return w;
+        return null;
+    }
+
+    public static String newWebhookId(Context c) {
+        int max = 0;
+        for (Webhook w : webhooks(c)) {
+            try { max = Math.max(max, Integer.parseInt(w.id.substring(1))); } catch (Exception ignored) {}
+        }
+        return "w" + (max + 1);
+    }
+
     /** "single" oder "grid" (Übersicht). */
     public static String viewMode(Context c)    { return sp(c).getString("viewMode", "single"); }
     public static void setViewMode(Context c, String m) { sp(c).edit().putString("viewMode", m).apply(); }

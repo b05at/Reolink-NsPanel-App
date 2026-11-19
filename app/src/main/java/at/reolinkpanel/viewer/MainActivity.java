@@ -17,6 +17,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -116,6 +117,17 @@ public class MainActivity extends Activity implements MotionService.Listener {
         }
     };
 
+    // --- Klingel-Oberfläche, Schloss und Webhook-Knöpfe
+    private View ringPanel, ringTalkBox, ringOpenBox;
+    private LinearLayout webhookPanel;
+    private ImageButton btnLock, btnRingTalk, btnRingOpen, btnRingSound;
+    private TextView tvRingTitle, tvRingSub, tvRingTalk, tvRingSound;
+    private boolean ringMode;
+    private String ringCamId;
+    private boolean ringPending;
+    private String ringPendingCam;
+    private final ExecutorService hookExecutor = Executors.newSingleThreadExecutor();
+
     // --- Bildschirm-Timeout
     private boolean screenReleased;    // Display darf ausgeschaltet werden
 
@@ -161,6 +173,18 @@ public class MainActivity extends Activity implements MotionService.Listener {
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
         talkPanel = findViewById(R.id.talkPanel);
+        ringPanel = findViewById(R.id.ringPanel);
+        ringTalkBox = findViewById(R.id.ringTalkBox);
+        ringOpenBox = findViewById(R.id.ringOpenBox);
+        webhookPanel = findViewById(R.id.webhookPanel);
+        btnLock = findViewById(R.id.btnLock);
+        btnRingTalk = findViewById(R.id.btnRingTalk);
+        btnRingOpen = findViewById(R.id.btnRingOpen);
+        btnRingSound = findViewById(R.id.btnRingSound);
+        tvRingTitle = findViewById(R.id.tvRingTitle);
+        tvRingSub = findViewById(R.id.tvRingSub);
+        tvRingTalk = findViewById(R.id.tvRingTalk);
+        tvRingSound = findViewById(R.id.tvRingSound);
         btnTalk = findViewById(R.id.btnTalk);
         tvTalk = findViewById(R.id.tvTalk);
         snapView = findViewById(R.id.snapView);
@@ -193,14 +217,23 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
         btnSound.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                // Antippen schaltet um, was gerade zu hören ist (auch den Klingel-Ton)
-                boolean nowOn = audioOn();
-                handler.removeCallbacks(ringAudioEnd);
-                ringAudioUntil = 0;
-                Prefs.sp(MainActivity.this).edit().putBoolean("muted", nowOn).apply();
-                applyVolume();
-                updateButtons();
+                toggleSound();
                 showControls();
+            }
+        });
+        btnLock.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openLock(); }
+        });
+        btnRingOpen.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openLock(); }
+        });
+        btnRingSound.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleSound(); }
+        });
+        findViewById(R.id.btnRingClose).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                exitRingMode();
+                if (returnToGrid) showGrid();
             }
         });
         btnStream.setOnClickListener(new View.OnClickListener() {
@@ -254,7 +287,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         dpad.setListener(new DPadView.Listener() {
             @Override public void onDirection(String op) { ptz(op); }
         });
-        btnTalk.setOnTouchListener(new View.OnTouchListener() {
+        View.OnTouchListener talkTouch = new View.OnTouchListener() {
             @SuppressLint("ClickableViewAccessibility")
             @Override public boolean onTouch(View v, MotionEvent e) {
                 boolean hold = !"toggle".equals(Prefs.talkMode(MainActivity.this));
@@ -273,7 +306,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
                         return true;
                 }
             }
-        });
+        };
+        btnTalk.setOnTouchListener(talkTouch);
+        btnRingTalk.setOnTouchListener(talkTouch);
         holdButton(findViewById(R.id.btnZoomIn), "ZoomInc");
         holdButton(findViewById(R.id.btnZoomOut), "ZoomDec");
         dashboard.setOnTileClick(new DashboardView.OnTileClick() {
@@ -298,6 +333,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         if (started && handleEventIntent(intent)) {
             screenReleased = false;
             applyMode();
+            consumeRingPending();
             resetSleepTimer();
         }
     }
@@ -329,6 +365,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         applyMode();
         applyMotion(MotionService.motionActive, MotionService.activeCamId, MotionService.activeRing);
         if (event) setControls(false); else showControls();
+        consumeRingPending();
         resetSleepTimer();
     }
 
@@ -340,6 +377,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
         MotionService.clearListener(this);
         if (sirenOn) setSiren(false);   // Sirene nie unbeaufsichtigt weiterlaufen lassen
         closeTalk();                    // Mikrofon nie unbeaufsichtigt offen lassen
+        ringMode = false;               // Klingel-Oberfläche beim nächsten Start nicht wieder zeigen
+        ringPanel.setVisibility(View.GONE);
         setPtzVisible(false);           // stoppt auch laufende Schwenks
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
@@ -358,6 +397,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         executor.shutdown();   // laufende Befehle (z. B. Stopp) noch abschließen
         if (libVlc != null) { libVlc.release(); libVlc = null; }
         talkExecutor.shutdown();
+        hookExecutor.shutdown();
         super.onDestroy();
     }
 
@@ -390,6 +430,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
         if (i.getBooleanExtra(MotionService.EXTRA_RING, false)) {
             i.removeExtra(MotionService.EXTRA_RING);
             startRingAudio();
+            ringPending = true;          // Klingel-Oberfläche nach dem Aufbau zeigen
+            ringPendingCam = c.id;
         }
         return true;
     }
@@ -472,6 +514,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
             }
         }
         updateLight();
+        btnLock.setVisibility(single && hasCam && cam.hasLock() ? View.VISIBLE : View.GONE);
+        buildWebhookButtons();
         setControls(controls.getVisibility() == View.VISIBLE);
     }
 
@@ -509,8 +553,12 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 if (active && ring && camId != null && (gridMode || cam == null || !camId.equals(cam.id))) {
                     switchToCam(camId, false);
                 }
-                if (active && ring) startRingAudio();
+                if (active && ring) {
+                    startRingAudio();
+                    enterRingMode(camId);
+                }
                 if (active) screenReleased = false;
+                if (!active && ringMode) exitRingMode();
                 applyMotion(active, camId, ring);
                 // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
                 if (!active && returnToGrid) showGrid();
@@ -525,7 +573,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             Cam c = Prefs.camera(this, camId);
             String name = c != null && cams.size() >= 2 ? " – " + c.displayName() : "";
             motionBadge.setText((ring ? "🔔 ES HAT GELÄUTET" : "● BEWEGUNG") + name);
-            motionBadge.setVisibility(View.VISIBLE);
+            motionBadge.setVisibility(ringMode ? View.GONE : View.VISIBLE);
         } else {
             motionBadge.setVisibility(View.GONE);
         }
@@ -993,6 +1041,224 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
     }
 
+    // ------------------------------------------------------------ Klingel-Oberfläche
+
+    private void consumeRingPending() {
+        if (!ringPending) return;
+        ringPending = false;
+        enterRingMode(ringPendingCam);
+    }
+
+    private void enterRingMode(String camId) {
+        Cam c = Prefs.camera(this, camId);
+        if (c == null) return;
+        ringMode = true;
+        ringCamId = camId;
+        tvRingTitle.setText("Es klingelt");
+        tvRingSub.setText(c.displayName() + " · " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMAN)
+                .format(new java.util.Date()));
+        ringOpenBox.setVisibility(c.hasLock() ? View.VISIBLE : View.GONE);
+        btnRingOpen.setBackgroundResource(R.drawable.fab_dark);
+        btnRingOpen.setImageResource(R.drawable.ic_lock);
+        updateButtons();
+        updateTalkUi();
+        motionBadge.setVisibility(View.GONE);
+        handler.removeCallbacks(hideControls);
+        setControls(true);
+    }
+
+    private void exitRingMode() {
+        if (!ringMode) return;
+        ringMode = false;
+        ringCamId = null;
+        if (talking) talkUp();
+        showControls();
+    }
+
+    private void toggleSound() {
+        // Antippen schaltet um, was gerade zu hören ist (auch den Klingel-Ton)
+        boolean nowOn = audioOn();
+        handler.removeCallbacks(ringAudioEnd);
+        ringAudioUntil = 0;
+        Prefs.sp(this).edit().putBoolean("muted", nowOn).apply();
+        applyVolume();
+        updateButtons();
+    }
+
+    // ------------------------------------------------------------ Türschloss
+
+    private void openLock() {
+        final Cam c = ringMode && ringCamId != null ? Prefs.camera(this, ringCamId) : cam;
+        if (c == null || !c.hasLock()) return;
+        handler.removeCallbacks(hideControls);
+        if (c.lockConfirm) {
+            new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                    .setTitle("Tür öffnen?")
+                    .setMessage(c.displayName())
+                    .setPositiveButton("Öffnen", new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface d, int which) { doOpenLock(c); }
+                    })
+                    .setNegativeButton("Abbrechen", null)
+                    .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                        @Override public void onDismiss(DialogInterface dialog) { Ui.hideBars(MainActivity.this); }
+                    })
+                    .show();
+        } else {
+            doOpenLock(c);
+        }
+    }
+
+    private void doOpenLock(final Cam c) {
+        Toast.makeText(this, "Tür wird geöffnet…", Toast.LENGTH_SHORT).show();
+        hookExecutor.execute(new Runnable() {
+            @Override public void run() {
+                String msg;
+                boolean ok = false;
+                try {
+                    int code = Webhook.call(c.lockUrl, c.lockMethod, c.lockBody);
+                    ok = code >= 200 && code < 300;
+                    msg = ok ? "✓ Tür geöffnet" : "⚠ Schloss: " + Webhook.describe(code);
+                } catch (Exception e) {
+                    msg = "⚠ Schloss nicht erreichbar: " + e.getMessage();
+                }
+                final String m = msg;
+                final boolean good = ok;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (isDestroyed()) return;
+                        Toast.makeText(MainActivity.this, m, Toast.LENGTH_LONG).show();
+                        if (good) flashOpened();
+                    }
+                });
+            }
+        });
+    }
+
+    /** Kurz zeigen, dass geöffnet wurde (Schloss-Symbol offen, blau). */
+    private void flashOpened() {
+        for (ImageButton b : new ImageButton[]{btnLock, btnRingOpen}) {
+            b.setImageResource(R.drawable.ic_lock_open);
+            b.setBackgroundResource(R.drawable.fab_open_on);
+            b.setImageTintList(ColorStateList.valueOf(0xFF000000));
+        }
+        tvRingTitleBackup();
+        handler.postDelayed(new Runnable() {
+            @Override public void run() {
+                for (ImageButton b : new ImageButton[]{btnLock, btnRingOpen}) {
+                    b.setImageResource(R.drawable.ic_lock);
+                    b.setBackgroundResource(R.drawable.fab_dark);
+                    b.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+                }
+            }
+        }, 4000);
+    }
+
+    private void tvRingTitleBackup() {
+        if (ringMode) tvRingTitle.setText("Tür geöffnet");
+    }
+
+    // ------------------------------------------------------------ Webhook-Knöpfe
+
+    /** Knöpfe rechts: passende Webhooks (alle Kameras bzw. diese Kamera), max. 3 sichtbar. */
+    private void buildWebhookButtons() {
+        webhookPanel.removeAllViews();
+        final List<Webhook> show = new ArrayList<>();
+        for (Webhook w : Prefs.webhooks(this)) {
+            boolean forAll = w.camId == null || w.camId.isEmpty();
+            boolean forThis = !gridMode && cam != null && cam.id.equals(w.camId);
+            if (forAll || forThis) show.add(w);
+        }
+        int n = show.size();
+        int direct = n > 3 ? 2 : n;
+        for (int i = 0; i < direct; i++) addHookButton(show.get(i));
+        if (n > 3) {
+            ImageButton more = hookButton(R.drawable.ic_more, "Weitere Knöpfe");
+            more.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { pickWebhook(show); }
+            });
+        }
+    }
+
+    private ImageButton hookButton(int icon, String desc) {
+        ImageButton b = new ImageButton(this);
+        b.setImageResource(icon);
+        b.setBackgroundResource(R.drawable.fab_dark);
+        b.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+        b.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        b.setContentDescription(desc);
+        int size = Math.round(52 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+        lp.bottomMargin = Math.round(8 * getResources().getDisplayMetrics().density);
+        webhookPanel.addView(b, lp);
+        return b;
+    }
+
+    private void addHookButton(final Webhook w) {
+        ImageButton b = hookButton(Icons.res(w.icon), w.name);
+        b.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { runWebhook(w); }
+        });
+        b.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) {
+                Toast.makeText(MainActivity.this, w.name, Toast.LENGTH_SHORT).show();
+                return true;
+            }
+        });
+    }
+
+    private void pickWebhook(final List<Webhook> list) {
+        handler.removeCallbacks(hideControls);
+        String[] names = new String[list.size()];
+        for (int i = 0; i < names.length; i++) names[i] = list.get(i).name;
+        new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Webhook auslösen")
+                .setItems(names, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) { runWebhook(list.get(which)); }
+                })
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override public void onDismiss(DialogInterface dialog) { Ui.hideBars(MainActivity.this); showControls(); }
+                })
+                .show();
+    }
+
+    private void runWebhook(final Webhook w) {
+        showControls();
+        if (w.confirm) {
+            new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                    .setTitle(w.name + " auslösen?")
+                    .setPositiveButton("Auslösen", new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface d, int which) { doWebhook(w); }
+                    })
+                    .setNegativeButton("Abbrechen", null)
+                    .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                        @Override public void onDismiss(DialogInterface dialog) { Ui.hideBars(MainActivity.this); }
+                    })
+                    .show();
+        } else {
+            doWebhook(w);
+        }
+    }
+
+    private void doWebhook(final Webhook w) {
+        hookExecutor.execute(new Runnable() {
+            @Override public void run() {
+                String msg;
+                try {
+                    int code = Webhook.call(w.url, w.method, w.body);
+                    msg = (code >= 200 && code < 300 ? "✓ " : "⚠ ") + w.name + ": " + Webhook.describe(code);
+                } catch (Exception e) {
+                    msg = "⚠ " + w.name + " nicht erreichbar: " + e.getMessage();
+                }
+                final String m = msg;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (!isDestroyed()) Toast.makeText(MainActivity.this, m, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+    }
+
     // ------------------------------------------------------------ Gegensprechen
 
     private boolean talkAllowed() {
@@ -1139,7 +1405,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
             btnTalk.setBackgroundResource(R.drawable.fab_talk_on);
             btnTalk.setImageTintList(ColorStateList.valueOf(0xFF000000));
             tvTalk.setText("Sprechen…");
+            btnRingTalk.setBackgroundResource(R.drawable.fab_talk_on);
+            btnRingTalk.setImageTintList(ColorStateList.valueOf(0xFF000000));
+            tvRingTalk.setText("Sprechen…");
         } else {
+            btnRingTalk.setBackgroundResource(R.drawable.fab_dark);
+            btnRingTalk.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+            tvRingTalk.setText("toggle".equals(Prefs.talkMode(this)) ? "Sprechen" : "Halten zum Sprechen");
             btnTalk.setBackgroundResource(R.drawable.fab_dark);
             btnTalk.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
             tvTalk.setText("toggle".equals(Prefs.talkMode(this)) ? "Sprechen" : "Halten");
@@ -1343,7 +1615,21 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     /** Bedienleiste + obere Knöpfe ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
     private void setControls(boolean show) {
+        if (ringMode) {
+            // Beim Läuten nur die Klingel-Oberfläche
+            controls.setVisibility(View.GONE);
+            topLeft.setVisibility(View.GONE);
+            sidePanel.setVisibility(View.GONE);
+            talkPanel.setVisibility(View.GONE);
+            webhookPanel.setVisibility(View.GONE);
+            if (ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
+            ringTalkBox.setVisibility(talkAllowed() ? View.VISIBLE : View.GONE);
+            ringPanel.setVisibility(View.VISIBLE);
+            return;
+        }
+        ringPanel.setVisibility(View.GONE);
         if (gridMode) show = true;   // in der Übersicht immer bedienbar
+        webhookPanel.setVisibility(show && webhookPanel.getChildCount() > 0 ? View.VISIBLE : View.GONE);
         controls.setVisibility(show ? View.VISIBLE : View.GONE);
         topLeft.setVisibility(show ? View.VISIBLE : View.GONE);
         sidePanel.setVisibility(show || sirenOn ? View.VISIBLE : View.GONE);
@@ -1395,6 +1681,10 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateButtons() {
         boolean muted = !audioOn();
+        if (btnRingSound != null) {
+            btnRingSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
+            tvRingSound.setText(muted ? "Ton aus" : "Ton an");
+        }
         btnSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
         btnSound.setActivated(!muted);
         boolean hd = !"sub".equals(Prefs.liveStream(this));

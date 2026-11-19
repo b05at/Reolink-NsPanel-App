@@ -41,18 +41,24 @@
             android:textColor="#000000" />
     </LinearLayout>
 
-    <ScrollView
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        android:layout_weight="1">
+
+    <ScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingLeft="10dp"
-            android:paddingRight="10dp"
+            android:paddingRight="32dp"
             android:paddingBottom="16dp">
 
             <!-- Kameras -->
@@ -60,6 +66,14 @@
                 <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Kameras &amp; Türklingeln" />
                 <LinearLayout android:id="@+id/camList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
                 <TextView android:id="@+id/btnAddCam" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="8dp" android:background="@drawable/chip" android:clickable="true" android:drawableLeft="@drawable/ic_add" android:drawablePadding="8dp" android:drawableTint="@color/accent" android:focusable="true" android:gravity="center" android:paddingLeft="14dp" android:paddingRight="14dp" android:text="Kamera hinzufügen" android:textColor="@color/text" android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- Webhook-Knöpfe -->
+            <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Webhook-Knöpfe" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Eigene Knöpfe im Livebild, z. B. Garagentor, Licht oder Steckdose (Shelly, Home Assistant, Node-RED …). Das Türschloss stellst du bei der jeweiligen Kamera ein." android:textColor="@color/textDim" android:textSize="12sp" />
+                <LinearLayout android:id="@+id/hookList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+                <TextView android:id="@+id/btnAddHook" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="8dp" android:background="@drawable/chip" android:clickable="true" android:drawableLeft="@drawable/ic_add" android:drawablePadding="8dp" android:drawableTint="@color/accent" android:focusable="true" android:gravity="center" android:paddingLeft="14dp" android:paddingRight="14dp" android:text="Webhook-Knopf hinzufügen" android:textColor="@color/text" android:textSize="14sp" />
             </LinearLayout>
 
             <!-- Bewegung -->
@@ -167,4 +181,14 @@
 
         </LinearLayout>
     </ScrollView>
+
+        <!-- breite, greifbare Scrollleiste -->
+        <at.reolinkpanel.viewer.ScrollRail
+            android:id="@+id/scrollRail"
+            android:layout_width="30dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+    </FrameLayout>
 </LinearLayout>

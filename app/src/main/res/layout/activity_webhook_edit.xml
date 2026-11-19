@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp"
+        android:paddingRight="10dp">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            style="@style/IconButton"
+            android:contentDescription="Zurück"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:id="@+id/tvTitle"
+            style="@style/Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:layout_weight="1"
+            android:singleLine="true"
+            android:text="Webhook-Knopf" />
+
+        <Button
+            android:id="@+id/btnSave"
+            style="@style/BarButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minHeight="40dp"
+            android:background="@drawable/btn_primary"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:text="Speichern"
+            android:textColor="#000000" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ScrollView
+            android:id="@+id/scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingLeft="10dp"
+                android:paddingRight="32dp"
+                android:paddingBottom="16dp">
+
+                <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp">
+                    <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Knopf" />
+                    <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Name" />
+                    <EditText android:id="@+id/etName" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="z. B. Garagentor, Gartenlicht" android:inputType="textCapSentences" />
+                    <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Symbol" />
+                    <LinearLayout android:id="@+id/iconGrid" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="vertical" />
+                    <TextView android:id="@+id/tvIconName" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/textDim" android:textSize="12sp" />
+                    <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Anzeigen bei" />
+                    <Spinner android:id="@+id/spCam" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="4dp" android:background="@drawable/field_bg" android:paddingLeft="4dp" android:popupBackground="@color/surface" android:spinnerMode="dropdown" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView style="@style/Section" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aufruf" />
+                    <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="URL" />
+                    <EditText android:id="@+id/etUrl" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="http://192.168.1.40/relay/0?turn=toggle" android:inputType="textUri" />
+                    <RadioGroup android:id="@+id/rgMethod" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                        <RadioButton android:id="@+id/rbGet" style="@style/Option" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginRight="16dp" android:text="GET" />
+                        <RadioButton android:id="@+id/rbPost" style="@style/Option" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="POST" />
+                    </RadioGroup>
+                    <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Inhalt bei POST (optional, z. B. JSON)" />
+                    <EditText android:id="@+id/etBody" style="@style/Field" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text" />
+                    <CheckBox android:id="@+id/cbConfirm" style="@style/Option" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Vor dem Auslösen nachfragen" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Passwort-geschützt: http://benutzer:passwort@IP/… (Basic-Auth). Geht mit Shelly, Home Assistant (Webhook-Trigger), Node-RED, ioBroker u. v. m." android:textColor="@color/textDim" android:textSize="12sp" />
+                    <Button android:id="@+id/btnTest" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/chip" android:text="Jetzt auslösen (Test)" />
+                    <TextView android:id="@+id/tvTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/textDim" android:textSize="13sp" />
+                </LinearLayout>
+
+                <Button android:id="@+id/btnDelete" style="@style/BarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/chip" android:text="Knopf entfernen" android:textColor="@color/motion" />
+            </LinearLayout>
+        </ScrollView>
+
+        <at.reolinkpanel.viewer.ScrollRail
+            android:id="@+id/scrollRail"
+            android:layout_width="30dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end" />
+    </FrameLayout>
+</LinearLayout>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Klingel-Panel: dunkle Karte mit gelber Oberkante -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/motion" />
+            <corners android:topLeftRadius="22dp" android:topRightRadius="22dp" />
+        </shape>
+    </item>
+    <item android:top="3dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#F2151A21" />
+            <corners android:topLeftRadius="20dp" android:topRightRadius="20dp" />
+        </shape>
+    </item>
+</layer-list>

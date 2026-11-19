@@ -17,6 +17,13 @@ public class Cam {
     public boolean doorbell = false;
     /** Bewegung dieser Kamera schaltet den Bildschirm ein. */
     public boolean wake = true;
+    /** Türschloss per Webhook (leer = kein Schloss). */
+    public String lockUrl = "";
+    public String lockMethod = "GET";
+    public String lockBody = "";
+    public boolean lockConfirm = true;
+
+    public boolean hasLock() { return lockUrl != null && !lockUrl.trim().isEmpty(); }
 
     public JSONObject toJson() {
         JSONObject o = new JSONObject();
@@ -32,6 +39,10 @@ public class Cam {
             o.put("rtspPath", rtspPath);
             o.put("doorbell", doorbell);
             o.put("wake", wake);
+            o.put("lockUrl", lockUrl);
+            o.put("lockMethod", lockMethod);
+            o.put("lockBody", lockBody);
+            o.put("lockConfirm", lockConfirm);
         } catch (JSONException ignored) {
         }
         return o;
@@ -50,6 +61,10 @@ public class Cam {
         c.rtspPath = o.optString("rtspPath", "");
         c.doorbell = o.optBoolean("doorbell", false);
         c.wake = o.optBoolean("wake", true);
+        c.lockUrl = o.optString("lockUrl", "");
+        c.lockMethod = o.optString("lockMethod", "GET");
+        c.lockBody = o.optString("lockBody", "");
+        c.lockConfirm = o.optBoolean("lockConfirm", true);
         return c;
     }
 

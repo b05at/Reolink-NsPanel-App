@@ -84,6 +84,12 @@ public class SettingsActivity extends Activity {
         findViewById(R.id.btnSave).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { save(); }
         });
+        ((ScrollRail) findViewById(R.id.scrollRail)).attach((android.widget.ScrollView) findViewById(R.id.scroll));
+        findViewById(R.id.btnAddHook).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, WebhookEditActivity.class));
+            }
+        });
         findViewById(R.id.btnAddCam).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 startActivity(new Intent(SettingsActivity.this, CameraEditActivity.class));
@@ -113,7 +119,30 @@ public class SettingsActivity extends Activity {
         super.onStart();
         AppState.visible++;
         fillCameras();
+        fillWebhooks();
         updateScreenHint();
+    }
+
+    /** Liste der Webhook-Knöpfe – Tippen öffnet die Bearbeitung. */
+    private void fillWebhooks() {
+        LinearLayout list = findViewById(R.id.hookList);
+        list.removeAllViews();
+        LayoutInflater inf = LayoutInflater.from(this);
+        for (final Webhook w : Prefs.webhooks(this)) {
+            View row = inf.inflate(R.layout.item_camera, list, false);
+            ((TextView) row.findViewById(R.id.tvCamName)).setText(w.name);
+            Cam c = w.camId.isEmpty() ? null : Prefs.camera(this, w.camId);
+            ((TextView) row.findViewById(R.id.tvCamInfo)).setText(
+                    (c != null ? "Nur bei " + c.displayName() + " · " : "") + w.method + " " + w.url);
+            ((android.widget.ImageView) row.findViewById(R.id.ivCamIcon)).setImageResource(Icons.res(w.icon));
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    startActivity(new Intent(SettingsActivity.this, WebhookEditActivity.class)
+                            .putExtra(WebhookEditActivity.EXTRA_ID, w.id));
+                }
+            });
+            list.addView(row);
+        }
     }
 
     /** Liste der Kameras – Tippen öffnet die Bearbeitung. */
@@ -125,7 +154,8 @@ public class SettingsActivity extends Activity {
             View row = inf.inflate(R.layout.item_camera, camList, false);
             ((TextView) row.findViewById(R.id.tvCamName)).setText(c.displayName());
             ((TextView) row.findViewById(R.id.tvCamInfo)).setText(
-                    (c.doorbell ? "Türklingel · " : "") + c.host + (c.wake ? "" : " · weckt nicht"));
+                    (c.doorbell ? "Türklingel · " : "") + c.host + (c.wake ? "" : " · weckt nicht")
+                            + (c.hasLock() ? " · Schloss" : ""));
             ((android.widget.ImageView) row.findViewById(R.id.ivCamIcon)).setImageResource(
                     c.doorbell ? R.drawable.ic_doorbell : R.drawable.ic_videocam);
             row.setOnClickListener(new View.OnClickListener() {
