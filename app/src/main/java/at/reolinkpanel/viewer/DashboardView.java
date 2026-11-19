@@ -74,8 +74,49 @@ public class DashboardView extends LinearLayout {
         fill = fillTiles;
         removeAllViews();
         tiles.clear();
-        int n = cams.size();
-        int cols = n <= 2 ? 1 : n <= 4 ? 2 : 3;
+        for (int i = 0; i < cams.size(); i++) {
+            String good = Prefs.sp(getContext()).getString("rtspOk_" + cams.get(i).id, "");
+            boolean vlcOnly = good.startsWith("vlc:");   // ExoPlayer kann diesen Stream nicht
+            tiles.add(buildTile(cams.get(i), liveVideo && i < MAX_LIVE && !vlcOnly));
+        }
+        arrange(getWidth(), getHeight());
+        running = true;
+        for (Tile t : tiles) if (t.live) startPlayer(t);
+        snapThread = new Thread(new Runnable() {
+            @Override public void run() { snapLoop(Math.max(1, intervalSec)); }
+        }, "dashboard-snap");
+        snapThread.start();
+    }
+
+    private int arrangedW = -1, arrangedH = -1;
+
+    /**
+     * Ordnet die Kacheln so an, dass sie möglichst groß werden (16:9-Bilder):
+     * z. B. 2 Kameras im Querformat nebeneinander, im Hochformat untereinander.
+     */
+    private void arrange(int w, int h) {
+        arrangedW = w;
+        arrangedH = h;
+        removeAllViews();
+        for (Tile t : tiles) if (t.root.getParent() != null) ((android.view.ViewGroup) t.root.getParent()).removeView(t.root);
+        int n = tiles.size();
+        if (n == 0) return;
+        // nutzbare Fläche ohne Innenabstand (unten liegt die Bedienleiste)
+        w -= getPaddingLeft() + getPaddingRight();
+        h -= getPaddingTop() + getPaddingBottom();
+        int cols;
+        if (w <= 0 || h <= 0) {
+            cols = n <= 2 ? 1 : n <= 4 ? 2 : 3;
+        } else {
+            cols = 1;
+            float best = -1;
+            for (int c = 1; c <= n; c++) {
+                int rows = (n + c - 1) / c;
+                float tileW = w / (float) c, tileH = h / (float) rows;
+                float imgW = Math.min(tileW, tileH * 16f / 9f);   // sichtbare Bildbreite
+                if (imgW > best + 0.5f) { best = imgW; cols = c; }
+            }
+        }
         int rows = (n + cols - 1) / cols;
         int idx = 0;
         for (int r = 0; r < rows; r++) {
@@ -85,24 +126,22 @@ public class DashboardView extends LinearLayout {
             for (int c = 0; c < cols; c++) {
                 LayoutParams lp = new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f);
                 lp.setMargins(dp(2), dp(2), dp(2), dp(2));
-                if (idx < n) {
-                    String good = Prefs.sp(getContext()).getString("rtspOk_" + cams.get(idx).id, "");
-                    boolean vlcOnly = good.startsWith("vlc:");   // ExoPlayer kann diesen Stream nicht
-                    Tile t = buildTile(cams.get(idx), liveVideo && idx < MAX_LIVE && !vlcOnly);
-                    row.addView(t.root, lp);
-                    tiles.add(t);
-                } else {
-                    row.addView(new View(getContext()), lp);   // leere Zelle
-                }
+                if (idx < n) row.addView(tiles.get(idx).root, lp);
+                else row.addView(new View(getContext()), lp);   // leere Zelle
                 idx++;
             }
         }
-        running = true;
-        for (Tile t : tiles) if (t.live) startPlayer(t);
-        snapThread = new Thread(new Runnable() {
-            @Override public void run() { snapLoop(Math.max(1, intervalSec)); }
-        }, "dashboard-snap");
-        snapThread.start();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        if (!tiles.isEmpty() && (w != arrangedW || h != arrangedH)) {
+            final int fw = w, fh = h;
+            post(new Runnable() {
+                @Override public void run() { arrange(fw, fh); }
+            });
+        }
     }
 
     public void stop() {

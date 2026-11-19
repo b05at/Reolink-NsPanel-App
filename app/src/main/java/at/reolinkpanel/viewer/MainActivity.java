@@ -16,6 +16,7 @@ import android.provider.Settings;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -143,6 +144,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private final Runnable callTimeout = new Runnable() {
         @Override public void run() { endCall(); }
     };
+    /** Form des Bildschirms für den Anruf: 0 = quadratisch, 1 = Querformat, 2 = Hochformat. */
+    private int callShape = 0;
+    private boolean callLayoutDirty = true;
     private final Runnable hideCallControls = new Runnable() {
         @Override public void run() {
             if (callState == CALL_ACTIVE && !talking) callControls.setVisibility(View.GONE);
@@ -210,6 +214,12 @@ public class MainActivity extends Activity implements MotionService.Listener {
         btnHangup = findViewById(R.id.btnHangup);
         hangupRing = findViewById(R.id.hangupRing);
         callMode = new io.github.patrick11994.reolinkdoorbell.CallMode(this);
+        // Anruf-Bildschirm passt sich an Format und Drehung an
+        callScreen.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                if (r - l != ol - or || b - t != ob - ot || callLayoutDirty) layoutCall();
+            }
+        });
         btnTalk = findViewById(R.id.btnTalk);
         tvTalk = findViewById(R.id.tvTalk);
         snapView = findViewById(R.id.snapView);
@@ -441,6 +451,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
         talkExecutor.shutdown();
         hookExecutor.shutdown();
         super.onDestroy();
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        callLayoutDirty = true;   // Anruf-Bildschirm neu anordnen
+        if (callState != CALL_NONE) callScreen.requestLayout();
     }
 
     @Override
@@ -1105,6 +1122,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         handler.removeCallbacks(callTimeout);
         restartRingCountdown();
         callControls.setVisibility(View.VISIBLE);
+        callLayoutDirty = true;
         updateCallUi();
         applyVolume();
         motionBadge.setVisibility(View.GONE);
@@ -1158,12 +1176,91 @@ public class MainActivity extends Activity implements MotionService.Listener {
         callMode.leave();
         hangupRing.stop();
         callScreen.setVisibility(View.GONE);
+        setVideoInsets(0, 0, 0, 0);
+    }
+
+    /**
+     * Ordnet den Anruf-Bildschirm je nach Format an:
+     * quadratisch – Video vollflächig, Bedienung darüber (blendet im Gespräch aus);
+     * Querformat – Video links, Bedienung als schwarze Spalte rechts;
+     * Hochformat – Video zwischen Namensleiste und Bedienung, nichts verdeckt.
+     */
+    private void layoutCall() {
+        if (callState == CALL_NONE) return;
+        int w = callScreen.getWidth(), h = callScreen.getHeight();
+        if (w == 0 || h == 0) return;
+        callLayoutDirty = false;
+        float d = getResources().getDisplayMetrics().density;
+        View top = findViewById(R.id.callTop);
+        LinearLayout ctl = (LinearLayout) callControls;
+        FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) ctl.getLayoutParams();
+        FrameLayout.LayoutParams tp = (FrameLayout.LayoutParams) top.getLayoutParams();
+        int topH = Math.round(60 * d);
+        int shape = w > h * 1.25f ? 1 : h > w * 1.25f ? 2 : 0;
+        callShape = shape;
+        int cardSize = Math.round(58 * d);
+        if (shape == 1) {
+            int col = Math.min(Math.max(Math.round(270 * d), Math.round(w * 0.34f)), Math.round(w * 0.5f));
+            cp.width = col;
+            cp.height = FrameLayout.LayoutParams.MATCH_PARENT;
+            cp.gravity = android.view.Gravity.END | android.view.Gravity.TOP;
+            ctl.setGravity(android.view.Gravity.BOTTOM);
+            ctl.setBackgroundColor(0xFF000000);
+            tp.width = w - col;
+            tp.gravity = android.view.Gravity.START | android.view.Gravity.TOP;
+            // Schnellknöpfe müssen in die Spalte passen
+            int n = Math.max(1, callCards.getChildCount());
+            cardSize = Math.min(cardSize, (col - Math.round(16 * d) * n) / n);
+            setVideoInsets(0, topH, col, 0);
+        } else {
+            cp.width = FrameLayout.LayoutParams.MATCH_PARENT;
+            cp.height = FrameLayout.LayoutParams.WRAP_CONTENT;
+            cp.gravity = android.view.Gravity.BOTTOM;
+            ctl.setGravity(android.view.Gravity.NO_GRAVITY);
+            tp.width = FrameLayout.LayoutParams.MATCH_PARENT;
+            tp.gravity = android.view.Gravity.TOP;
+            if (shape == 2) {
+                ctl.setBackgroundColor(0xFF000000);
+                callControls.setVisibility(View.VISIBLE);
+                handler.removeCallbacks(hideCallControls);
+                ctl.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.AT_MOST));
+                setVideoInsets(0, topH, 0, ctl.getMeasuredHeight());
+            } else {
+                ctl.setBackgroundColor(0x00000000);   // quadratisch: Video unter der Bedienung wie im Original
+                setVideoInsets(0, 0, 0, 0);
+            }
+        }
+        for (int i = 0; i < callCards.getChildCount(); i++) {
+            View c = callCards.getChildAt(i);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) c.getLayoutParams();
+            lp.width = lp.height = cardSize;
+            c.setLayoutParams(lp);
+        }
+        if (shape == 1) {
+            ((LinearLayout.LayoutParams) callCards.getLayoutParams()).bottomMargin = Math.round(24 * d);
+        }
+        ctl.setLayoutParams(cp);
+        top.setLayoutParams(tp);
+    }
+
+    /** Video (Player, VLC, Standbild) auf einen Bereich begrenzen – 0 = vollflächig. */
+    private int[] videoInsets = {0, 0, 0, 0};
+
+    private void setVideoInsets(int l, int t, int r, int b) {
+        if (videoInsets[0] == l && videoInsets[1] == t && videoInsets[2] == r && videoInsets[3] == b) return;
+        videoInsets = new int[]{l, t, r, b};
+        for (View v : new View[]{playerView, vlcLayout, snapView}) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
+            lp.setMargins(l, t, r, b);
+            v.setLayoutParams(lp);
+        }
     }
 
     private void scheduleCallControlsHide() {
         handler.removeCallbacks(hideCallControls);
         if (callState != CALL_NONE) callControls.setVisibility(View.VISIBLE);
-        if (callState == CALL_ACTIVE) handler.postDelayed(hideCallControls, HIDE_AFTER_ANSWER_MS);
+        if (callState == CALL_ACTIVE && callShape == 0) handler.postDelayed(hideCallControls, HIDE_AFTER_ANSWER_MS);
     }
 
     /** Knöpfe und Beschriftungen je nach Zustand (Klingeln / Gespräch). */
@@ -1723,13 +1820,13 @@ public class MainActivity extends Activity implements MotionService.Listener {
             resetSleepTimer();
             if (callState == CALL_RINGING) {
                 restartRingCountdown();   // Berührung startet die Zeit bis zum Schließen neu
-            } else if (callState == CALL_ACTIVE && callControls.getVisibility() != View.VISIBLE) {
+            } else if (callState == CALL_ACTIVE && callShape == 0 && callControls.getVisibility() != View.VISIBLE) {
                 // Im Gespräch: Antippen holt die Bedienung zurück
                 callControls.setVisibility(View.VISIBLE);
                 handler.removeCallbacks(hideCallControls);
                 handler.postDelayed(hideCallControls, 4000);
                 return true;
-            } else if (callState == CALL_ACTIVE) {
+            } else if (callState == CALL_ACTIVE && callShape == 0) {
                 handler.removeCallbacks(hideCallControls);
                 handler.postDelayed(hideCallControls, 4000);
             }

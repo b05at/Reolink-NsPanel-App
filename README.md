@@ -60,7 +60,7 @@ Beim ersten Start öffnen sich die Einstellungen:
 
 Unter ⚙ → *Kameras & Türklingeln* beliebig viele Kameras anlegen. Pro Kamera einstellbar: Name, Zugang, ob sie eine **Türklingel** ist (wird beim Verbindungstest automatisch erkannt) und ob ihre Bewegung den Bildschirm einschaltet.
 
-- **Übersicht** (Raster-Symbol oben links): alle Kameras gleichzeitig. Standardmäßig als Standbilder, die alle 2 s aktualisiert werden – das braucht kaum CPU. Optional Livevideo für bis zu 4 Kameras.
+- **Übersicht** (Raster-Symbol oben links): alle Kameras gleichzeitig. Das Raster richtet sich nach dem Bildschirmformat, damit die Bilder möglichst groß sind. Standardmäßig als Standbilder, die alle 2 s aktualisiert werden – das braucht kaum CPU. Optional Livevideo für bis zu 4 Kameras.
 - Antippen einer Kachel öffnet das große Livebild dieser Kamera.
 - Bei Bewegung wird die Kachel gelb umrandet. Läutet die Türklingel, wechselt die Anzeige sofort auf die Klingel und kehrt danach zur Übersicht zurück.
 - Die Klingel-Erkennung nutzt den API-Befehl `GetEvents` (aktuelle Doorbell-Firmware erforderlich).
@@ -95,6 +95,7 @@ Beim Läuten öffnet sich ein Anruf-Bildschirm nach dem Vorbild von [ks-reolink-
 - unten **Annehmen**, **Lautsprecher**, **Auflegen**; ein Ring um Auflegen zeigt, wann der Bildschirm unbeantwortet schließt (1 Minute, Berührung startet neu)
 - nach dem Annehmen: **Mikrofon** (gedrückt halten bzw. freihändig je nach Einstellung), **Lautsprecher**, **Beenden**; die Bedienung blendet sich nach 1 s aus, Antippen holt sie zurück; Gespräche enden spätestens nach 10 Minuten
 - Farben ohne Rot/Grün: Annehmen blau, Auflegen bernstein
+- passt sich dem Bildschirm an: quadratisch (NSPanel Pro) Video vollflächig mit Bedienung darüber, Querformat Video links und Bedienung als Spalte rechts, Hochformat Video zwischen Namensleiste und Bedienung; auch beim Drehen
 
 ## Gegensprechen
 

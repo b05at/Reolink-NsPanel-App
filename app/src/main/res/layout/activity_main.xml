@@ -332,6 +332,7 @@
 
         <!-- oben: Name der Klingel, rechts „Mikrofon aktiv“ -->
         <LinearLayout
+            android:id="@+id/callTop"
             android:layout_width="match_parent"
             android:layout_height="60dp"
             android:layout_gravity="top"
