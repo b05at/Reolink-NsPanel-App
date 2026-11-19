@@ -88,7 +88,13 @@ Die Reolink-API liefert keine Vorschaubilder zu Aufnahmen. Die App speichert des
 
 ## Klingel-Oberfläche
 
-Beim Läuten erscheint unten eine eigene Leiste mit großen Knöpfen: **Sprechen** (halten), **Tür öffnen** (wenn ein Schloss eingetragen ist), **Ton** und **Fertig**. Der Ton ist dabei automatisch 1 Minute an.
+Beim Läuten öffnet sich ein Anruf-Bildschirm nach dem Vorbild von [ks-reolink-doorbell-intercom](https://github.com/patrick11994/ks-reolink-doorbell-intercom) (quadratische Variante):
+
+- oben der Name der Klingel, im Gespräch rechts „Mikrofon aktiv“
+- runde Schnellknöpfe: **Tür öffnen** (wenn ein Schloss eingetragen ist), Scheinwerfer, bis zu 3 Webhook-Knöpfe
+- unten **Annehmen**, **Lautsprecher**, **Auflegen**; ein Ring um Auflegen zeigt, wann der Bildschirm unbeantwortet schließt (1 Minute, Berührung startet neu)
+- nach dem Annehmen: **Mikrofon** (gedrückt halten bzw. freihändig je nach Einstellung), **Lautsprecher**, **Beenden**; die Bedienung blendet sich nach 1 s aus, Antippen holt sie zurück; Gespräche enden spätestens nach 10 Minuten
+- Farben ohne Rot/Grün: Annehmen blau, Auflegen bernstein
 
 ## Gegensprechen
 

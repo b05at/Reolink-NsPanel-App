@@ -118,14 +118,36 @@ public class MainActivity extends Activity implements MotionService.Listener {
     };
 
     // --- Klingel-Oberfläche, Schloss und Webhook-Knöpfe
-    private View ringPanel, ringTalkBox, ringOpenBox;
     private LinearLayout webhookPanel;
-    private ImageButton btnLock, btnRingTalk, btnRingOpen, btnRingSound;
-    private TextView tvRingTitle, tvRingSub, tvRingTalk, tvRingSound;
-    private boolean ringMode;
-    private String ringCamId;
+    private ImageButton btnLock;
     private boolean ringPending;
     private String ringPendingCam;
+
+    // --- Anruf-Bildschirm beim Klingeln (nach ks-reolink-doorbell-intercom)
+    private static final int CALL_NONE = 0, CALL_RINGING = 1, CALL_ACTIVE = 2;
+    private static final long RING_CLOSE_MS = 60000;          // unbeantwortet: nach 1 Minute schließen
+    private static final long CALL_END_MS = 10 * 60000;       // Gespräch: spätestens nach 10 Minuten beenden
+    private static final long HIDE_AFTER_ANSWER_MS = 1000;    // Bedienung blendet sich im Gespräch aus
+    private int callState = CALL_NONE;
+    private String ringCamId;
+    private boolean callSpeaker = true;
+    private View callScreen, callControls;
+    private LinearLayout callCards;
+    private TextView tvCallName, tvMicChip, tvAnswer, tvSpeaker, tvHangup;
+    private ImageButton btnAnswer, btnSpeaker, btnHangup, cardLock, cardLight;
+    private CountdownRing hangupRing;
+    private io.github.patrick11994.reolinkdoorbell.CallMode callMode;
+    private final Runnable ringTimeout = new Runnable() {
+        @Override public void run() { endCall(); }
+    };
+    private final Runnable callTimeout = new Runnable() {
+        @Override public void run() { endCall(); }
+    };
+    private final Runnable hideCallControls = new Runnable() {
+        @Override public void run() {
+            if (callState == CALL_ACTIVE && !talking) callControls.setVisibility(View.GONE);
+        }
+    };
     private final ExecutorService hookExecutor = Executors.newSingleThreadExecutor();
 
     // --- Bildschirm-Timeout
@@ -173,18 +195,21 @@ public class MainActivity extends Activity implements MotionService.Listener {
         topLeft = findViewById(R.id.topLeft);
         ptzPanel = findViewById(R.id.ptzPanel);
         talkPanel = findViewById(R.id.talkPanel);
-        ringPanel = findViewById(R.id.ringPanel);
-        ringTalkBox = findViewById(R.id.ringTalkBox);
-        ringOpenBox = findViewById(R.id.ringOpenBox);
         webhookPanel = findViewById(R.id.webhookPanel);
         btnLock = findViewById(R.id.btnLock);
-        btnRingTalk = findViewById(R.id.btnRingTalk);
-        btnRingOpen = findViewById(R.id.btnRingOpen);
-        btnRingSound = findViewById(R.id.btnRingSound);
-        tvRingTitle = findViewById(R.id.tvRingTitle);
-        tvRingSub = findViewById(R.id.tvRingSub);
-        tvRingTalk = findViewById(R.id.tvRingTalk);
-        tvRingSound = findViewById(R.id.tvRingSound);
+        callScreen = findViewById(R.id.callScreen);
+        callControls = findViewById(R.id.callControls);
+        callCards = findViewById(R.id.callCards);
+        tvCallName = findViewById(R.id.tvCallName);
+        tvMicChip = findViewById(R.id.tvMicChip);
+        tvAnswer = findViewById(R.id.tvAnswer);
+        tvSpeaker = findViewById(R.id.tvSpeaker);
+        tvHangup = findViewById(R.id.tvHangup);
+        btnAnswer = findViewById(R.id.btnAnswer);
+        btnSpeaker = findViewById(R.id.btnSpeaker);
+        btnHangup = findViewById(R.id.btnHangup);
+        hangupRing = findViewById(R.id.hangupRing);
+        callMode = new io.github.patrick11994.reolinkdoorbell.CallMode(this);
         btnTalk = findViewById(R.id.btnTalk);
         tvTalk = findViewById(R.id.tvTalk);
         snapView = findViewById(R.id.snapView);
@@ -224,16 +249,35 @@ public class MainActivity extends Activity implements MotionService.Listener {
         btnLock.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { openLock(); }
         });
-        btnRingOpen.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { openLock(); }
-        });
-        btnRingSound.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { toggleSound(); }
-        });
-        findViewById(R.id.btnRingClose).setOnClickListener(new View.OnClickListener() {
+        btnSpeaker.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                exitRingMode();
-                if (returnToGrid) showGrid();
+                callSpeaker = !callSpeaker;
+                applyVolume();
+                updateCallUi();
+            }
+        });
+        btnHangup.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { endCall(); }
+        });
+        // Annehmen (beim Klingeln) bzw. Mikrofon (im Gespräch)
+        btnAnswer.setOnTouchListener(new View.OnTouchListener() {
+            @SuppressLint("ClickableViewAccessibility")
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                boolean hold = !"toggle".equals(Prefs.talkMode(MainActivity.this));
+                int a = e.getActionMasked();
+                if (a == MotionEvent.ACTION_DOWN) v.setPressed(true);
+                if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) v.setPressed(false);
+                if (callState == CALL_RINGING) {
+                    if (a == MotionEvent.ACTION_UP) answerCall();
+                    return true;
+                }
+                if (hold) {
+                    if (a == MotionEvent.ACTION_DOWN) talkDown();
+                    else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) talkUp();
+                } else if (a == MotionEvent.ACTION_UP) {
+                    if (talking) talkUp(); else talkDown();
+                }
+                return true;
             }
         });
         btnStream.setOnClickListener(new View.OnClickListener() {
@@ -308,7 +352,6 @@ public class MainActivity extends Activity implements MotionService.Listener {
             }
         };
         btnTalk.setOnTouchListener(talkTouch);
-        btnRingTalk.setOnTouchListener(talkTouch);
         holdButton(findViewById(R.id.btnZoomIn), "ZoomInc");
         holdButton(findViewById(R.id.btnZoomOut), "ZoomDec");
         dashboard.setOnTileClick(new DashboardView.OnTileClick() {
@@ -377,8 +420,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
         MotionService.clearListener(this);
         if (sirenOn) setSiren(false);   // Sirene nie unbeaufsichtigt weiterlaufen lassen
         closeTalk();                    // Mikrofon nie unbeaufsichtigt offen lassen
-        ringMode = false;               // Klingel-Oberfläche beim nächsten Start nicht wieder zeigen
-        ringPanel.setVisibility(View.GONE);
+        resetCallState();               // Anruf-Bildschirm beim nächsten Start nicht wieder zeigen
         setPtzVisible(false);           // stoppt auch laufende Schwenks
         handler.removeCallbacksAndMessages(null);
         stopLive();   // spart CPU und WLAN, wenn das Display aus ist
@@ -558,10 +600,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
                     enterRingMode(camId);
                 }
                 if (active) screenReleased = false;
-                if (!active && ringMode) exitRingMode();
                 applyMotion(active, camId, ring);
-                // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen
-                if (!active && returnToGrid) showGrid();
+                // Ereignis vorbei -> zurück zur Übersicht, falls von dort gekommen (nicht während eines Anrufs)
+                if (!active && returnToGrid && callState == CALL_NONE) showGrid();
                 resetSleepTimer();
             }
         });
@@ -573,7 +614,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
             Cam c = Prefs.camera(this, camId);
             String name = c != null && cams.size() >= 2 ? " – " + c.displayName() : "";
             motionBadge.setText((ring ? "🔔 ES HAT GELÄUTET" : "● BEWEGUNG") + name);
-            motionBadge.setVisibility(ringMode ? View.GONE : View.VISIBLE);
+            motionBadge.setVisibility(callState != CALL_NONE ? View.GONE : View.VISIBLE);
         } else {
             motionBadge.setVisibility(View.GONE);
         }
@@ -583,7 +624,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateKeepOn() {
         boolean managed = effectiveTimeoutMs() != -1 && !screenReleased;
-        if (managed || MotionService.motionActive || sirenOn) {
+        if (managed || MotionService.motionActive || sirenOn || callState != CALL_NONE) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -965,6 +1006,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     }
 
     private void updateLight() {
+        if (callState != CALL_NONE) updateCallUi();
         if (lightOn) {
             btnLight.setBackgroundResource(R.drawable.fab_light_on);
             btnLight.setImageTintList(ColorStateList.valueOf(0xFF000000));
@@ -1049,30 +1091,152 @@ public class MainActivity extends Activity implements MotionService.Listener {
         enterRingMode(ringPendingCam);
     }
 
+    /** Es klingelt: Anruf-Bildschirm mit Annehmen / Lautsprecher / Auflegen. */
     private void enterRingMode(String camId) {
         Cam c = Prefs.camera(this, camId);
         if (c == null) return;
-        ringMode = true;
+        if (callState == CALL_ACTIVE && camId.equals(ringCamId)) return;   // läuft schon ein Gespräch
+        if (callState == CALL_NONE) callSpeaker = true;   // Ton der Klingel sofort hören
+        callState = CALL_RINGING;
         ringCamId = camId;
-        tvRingTitle.setText("Es klingelt");
-        tvRingSub.setText(c.displayName() + " · " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMAN)
-                .format(new java.util.Date()));
-        ringOpenBox.setVisibility(c.hasLock() ? View.VISIBLE : View.GONE);
-        btnRingOpen.setBackgroundResource(R.drawable.fab_dark);
-        btnRingOpen.setImageResource(R.drawable.ic_lock);
-        updateButtons();
-        updateTalkUi();
-        motionBadge.setVisibility(View.GONE);
+        tvCallName.setText(c.displayName());
+        buildCallCards(c);
         handler.removeCallbacks(hideControls);
+        handler.removeCallbacks(callTimeout);
+        restartRingCountdown();
+        callControls.setVisibility(View.VISIBLE);
+        updateCallUi();
+        applyVolume();
+        motionBadge.setVisibility(View.GONE);
         setControls(true);
     }
 
-    private void exitRingMode() {
-        if (!ringMode) return;
-        ringMode = false;
-        ringCamId = null;
-        if (talking) talkUp();
+    private void restartRingCountdown() {
+        handler.removeCallbacks(ringTimeout);
+        handler.postDelayed(ringTimeout, RING_CLOSE_MS);
+        hangupRing.start(RING_CLOSE_MS);
+    }
+
+    /** Annehmen: Countdown stoppt; freihändig = Mikrofon gleich offen, sonst Mikrofon-Knopf halten. */
+    private void answerCall() {
+        if (callState != CALL_RINGING) return;
+        callState = CALL_ACTIVE;
+        handler.removeCallbacks(ringTimeout);
+        hangupRing.stop();
+        handler.removeCallbacks(callTimeout);
+        handler.postDelayed(callTimeout, CALL_END_MS);
+        callSpeaker = true;
+        if ("toggle".equals(Prefs.talkMode(this))) {
+            callMode.enter();   // Android-Anrufmodus: Echounterdrückung auf dem Lautsprecher
+            talkDown();
+        }
+        applyVolume();
+        updateCallUi();
+        scheduleCallControlsHide();
+    }
+
+    /** Auflegen / Gespräch beenden – zurück zur vorherigen Ansicht. */
+    private void endCall() {
+        if (callState == CALL_NONE) return;
+        boolean back = returnToGrid;
+        resetCallState();
+        applyVolume();
+        updateButtons();
         showControls();
+        resetSleepTimer();
+        if (back) showGrid();
+    }
+
+    private void resetCallState() {
+        handler.removeCallbacks(ringTimeout);
+        handler.removeCallbacks(callTimeout);
+        handler.removeCallbacks(hideCallControls);
+        if (callState != CALL_NONE) closeTalk();
+        callState = CALL_NONE;
+        ringCamId = null;
+        ringAudioUntil = 0;
+        callMode.leave();
+        hangupRing.stop();
+        callScreen.setVisibility(View.GONE);
+    }
+
+    private void scheduleCallControlsHide() {
+        handler.removeCallbacks(hideCallControls);
+        if (callState != CALL_NONE) callControls.setVisibility(View.VISIBLE);
+        if (callState == CALL_ACTIVE) handler.postDelayed(hideCallControls, HIDE_AFTER_ANSWER_MS);
+    }
+
+    /** Knöpfe und Beschriftungen je nach Zustand (Klingeln / Gespräch). */
+    private void updateCallUi() {
+        if (callScreen == null) return;
+        boolean ringing = callState == CALL_RINGING;
+        boolean hold = !"toggle".equals(Prefs.talkMode(this));
+        boolean canTalk = talkAllowed();
+        findViewById(R.id.answerBox).setVisibility(canTalk ? View.VISIBLE : View.GONE);
+        if (ringing) {
+            btnAnswer.setImageResource(R.drawable.ic_call);
+            btnAnswer.setBackgroundResource(R.drawable.call_answer);
+            btnAnswer.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
+            tvAnswer.setText("Annehmen");
+            tvHangup.setText("Auflegen");
+        } else {
+            btnAnswer.setImageResource(talking ? R.drawable.ic_mic : R.drawable.ic_mic_off);
+            btnAnswer.setBackgroundResource(talking ? R.drawable.call_answer : R.drawable.call_speaker);
+            btnAnswer.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
+            tvAnswer.setText(hold && !talking ? "Halten" : "Mikrofon");
+            tvHangup.setText("Beenden");
+        }
+        btnSpeaker.setImageResource(callSpeaker ? R.drawable.ic_volume_on : R.drawable.ic_volume_off);
+        btnSpeaker.setBackgroundResource(callSpeaker ? R.drawable.call_speaker_on : R.drawable.call_speaker);
+        btnSpeaker.setImageTintList(ColorStateList.valueOf(callSpeaker ? 0xFF000000 : 0xFFFFFFFF));
+        btnHangup.setImageTintList(ColorStateList.valueOf(0xFF000000));
+        tvMicChip.setVisibility(talking ? View.VISIBLE : View.GONE);
+        if (cardLight != null) {
+            cardLight.setBackgroundResource(lightOn ? R.drawable.card_light_on : R.drawable.card_round);
+            cardLight.setImageTintList(ColorStateList.valueOf(lightOn ? 0xFF000000 : 0xFFFFFFFF));
+        }
+    }
+
+    /** Runde Schnellknöpfe über den Anrufknöpfen: Schloss, Scheinwerfer, Webhooks. */
+    private void buildCallCards(Cam c) {
+        callCards.removeAllViews();
+        cardLock = null;
+        cardLight = null;
+        if (c.hasLock()) {
+            cardLock = callCard(R.drawable.ic_lock, "Tür öffnen");
+            cardLock.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { openLock(); }
+            });
+        }
+        if (!c.doorbell && btnLight.getVisibility() == View.VISIBLE) {
+            cardLight = callCard(R.drawable.ic_light, "Licht");
+            cardLight.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { setLight(!lightOn); }
+            });
+        }
+        int n = 0;
+        for (final Webhook w : Prefs.webhooks(this)) {
+            if (!(w.camId == null || w.camId.isEmpty() || w.camId.equals(c.id))) continue;
+            if (++n > 3) break;   // Platz auf dem kleinen Bildschirm
+            ImageButton b = callCard(Icons.res(w.icon), w.name);
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { runWebhook(w); }
+            });
+        }
+    }
+
+    private ImageButton callCard(int icon, String desc) {
+        ImageButton b = new ImageButton(this);
+        b.setImageResource(icon);
+        b.setBackgroundResource(R.drawable.card_round);
+        b.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        b.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        b.setContentDescription(desc);
+        float d = getResources().getDisplayMetrics().density;
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Math.round(58 * d), Math.round(58 * d));
+        lp.leftMargin = lp.rightMargin = Math.round(8 * d);
+        callCards.addView(b, lp);
+        return b;
     }
 
     private void toggleSound() {
@@ -1088,7 +1252,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
     // ------------------------------------------------------------ Türschloss
 
     private void openLock() {
-        final Cam c = ringMode && ringCamId != null ? Prefs.camera(this, ringCamId) : cam;
+        final Cam c = callState != CALL_NONE && ringCamId != null ? Prefs.camera(this, ringCamId) : cam;
         if (c == null || !c.hasLock()) return;
         handler.removeCallbacks(hideControls);
         if (c.lockConfirm) {
@@ -1134,27 +1298,28 @@ public class MainActivity extends Activity implements MotionService.Listener {
         });
     }
 
-    /** Kurz zeigen, dass geöffnet wurde (Schloss-Symbol offen, blau). */
+    /** Kurz zeigen, dass geöffnet wurde (Schloss offen, blau gefüllt). */
     private void flashOpened() {
-        for (ImageButton b : new ImageButton[]{btnLock, btnRingOpen}) {
-            b.setImageResource(R.drawable.ic_lock_open);
-            b.setBackgroundResource(R.drawable.fab_open_on);
-            b.setImageTintList(ColorStateList.valueOf(0xFF000000));
+        btnLock.setImageResource(R.drawable.ic_lock_open);
+        btnLock.setBackgroundResource(R.drawable.fab_open_on);
+        btnLock.setImageTintList(ColorStateList.valueOf(0xFF000000));
+        if (cardLock != null) {
+            cardLock.setImageResource(R.drawable.ic_lock_open);
+            cardLock.setBackgroundResource(R.drawable.card_round_on);
+            cardLock.setImageTintList(ColorStateList.valueOf(0xFF000000));
         }
-        tvRingTitleBackup();
         handler.postDelayed(new Runnable() {
             @Override public void run() {
-                for (ImageButton b : new ImageButton[]{btnLock, btnRingOpen}) {
-                    b.setImageResource(R.drawable.ic_lock);
-                    b.setBackgroundResource(R.drawable.fab_dark);
-                    b.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+                btnLock.setImageResource(R.drawable.ic_lock);
+                btnLock.setBackgroundResource(R.drawable.fab_dark);
+                btnLock.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
+                if (cardLock != null) {
+                    cardLock.setImageResource(R.drawable.ic_lock);
+                    cardLock.setBackgroundResource(R.drawable.card_round);
+                    cardLock.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
                 }
             }
         }, 4000);
-    }
-
-    private void tvRingTitleBackup() {
-        if (ringMode) tvRingTitle.setText("Tür geöffnet");
     }
 
     // ------------------------------------------------------------ Webhook-Knöpfe
@@ -1337,7 +1502,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
                     });
         }
         talking = true;
-        muteLive(true);   // Kameraton aus, damit die Kamera sich nicht selbst hört
+        // Kameraton aus, damit die Kamera sich nicht selbst hört – außer im freihändigen Gespräch
+        // (dort übernimmt der Android-Anrufmodus die Echounterdrückung)
+        if (!(callState == CALL_ACTIVE && "toggle".equals(Prefs.talkMode(this)))) muteLive(true);
         updateTalkUi();
     }
 
@@ -1356,8 +1523,9 @@ public class MainActivity extends Activity implements MotionService.Listener {
         muteLive(false);
         updateTalkUi();
         handler.removeCallbacks(talkIdleClose);
-        if (talk != null) handler.postDelayed(talkIdleClose, TALK_IDLE_CLOSE_MS);
+        if (talk != null && callState == CALL_NONE) handler.postDelayed(talkIdleClose, TALK_IDLE_CLOSE_MS);
         showControls();
+        scheduleCallControlsHide();
     }
 
     /** Gespräch ganz beenden (Kamera-Lautsprecher wieder frei). */
@@ -1401,17 +1569,12 @@ public class MainActivity extends Activity implements MotionService.Listener {
     }
 
     private void updateTalkUi() {
+        updateCallUi();
         if (talking) {
             btnTalk.setBackgroundResource(R.drawable.fab_talk_on);
             btnTalk.setImageTintList(ColorStateList.valueOf(0xFF000000));
             tvTalk.setText("Sprechen…");
-            btnRingTalk.setBackgroundResource(R.drawable.fab_talk_on);
-            btnRingTalk.setImageTintList(ColorStateList.valueOf(0xFF000000));
-            tvRingTalk.setText("Sprechen…");
         } else {
-            btnRingTalk.setBackgroundResource(R.drawable.fab_dark);
-            btnRingTalk.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
-            tvRingTalk.setText("toggle".equals(Prefs.talkMode(this)) ? "Sprechen" : "Halten zum Sprechen");
             btnTalk.setBackgroundResource(R.drawable.fab_dark);
             btnTalk.setImageTintList(ColorStateList.valueOf(getColor(R.color.text)));
             tvTalk.setText("toggle".equals(Prefs.talkMode(this)) ? "Sprechen" : "Halten");
@@ -1534,7 +1697,8 @@ public class MainActivity extends Activity implements MotionService.Listener {
     private void goToSleep() {
         if (!started) return;
         // Nicht während Bewegung, Sirene oder Schwenken
-        if (MotionService.motionActive || sirenOn || talk != null || ptzPanel.getVisibility() == View.VISIBLE) {
+        if (MotionService.motionActive || sirenOn || talk != null || callState != CALL_NONE
+                || ptzPanel.getVisibility() == View.VISIBLE) {
             resetSleepTimer();
             return;
         }
@@ -1557,6 +1721,18 @@ public class MainActivity extends Activity implements MotionService.Listener {
                 updateKeepOn();
             }
             resetSleepTimer();
+            if (callState == CALL_RINGING) {
+                restartRingCountdown();   // Berührung startet die Zeit bis zum Schließen neu
+            } else if (callState == CALL_ACTIVE && callControls.getVisibility() != View.VISIBLE) {
+                // Im Gespräch: Antippen holt die Bedienung zurück
+                callControls.setVisibility(View.VISIBLE);
+                handler.removeCallbacks(hideCallControls);
+                handler.postDelayed(hideCallControls, 4000);
+                return true;
+            } else if (callState == CALL_ACTIVE) {
+                handler.removeCallbacks(hideCallControls);
+                handler.postDelayed(hideCallControls, 4000);
+            }
         }
         return super.dispatchTouchEvent(ev);
     }
@@ -1615,19 +1791,18 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     /** Bedienleiste + obere Knöpfe ein-/ausblenden (aktive Sirene bleibt immer sichtbar). */
     private void setControls(boolean show) {
-        if (ringMode) {
-            // Beim Läuten nur die Klingel-Oberfläche
+        if (callState != CALL_NONE) {
+            // Beim Läuten / im Gespräch nur der Anruf-Bildschirm
             controls.setVisibility(View.GONE);
             topLeft.setVisibility(View.GONE);
             sidePanel.setVisibility(View.GONE);
             talkPanel.setVisibility(View.GONE);
             webhookPanel.setVisibility(View.GONE);
             if (ptzPanel.getVisibility() == View.VISIBLE) setPtzVisible(false);
-            ringTalkBox.setVisibility(talkAllowed() ? View.VISIBLE : View.GONE);
-            ringPanel.setVisibility(View.VISIBLE);
+            callScreen.setVisibility(View.VISIBLE);
             return;
         }
-        ringPanel.setVisibility(View.GONE);
+        callScreen.setVisibility(View.GONE);
         if (gridMode) show = true;   // in der Übersicht immer bedienbar
         webhookPanel.setVisibility(show && webhookPanel.getChildCount() > 0 ? View.VISIBLE : View.GONE);
         controls.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -1663,6 +1838,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     /** Ton an: dauerhaft eingeschaltet oder gerade wegen Klingeln (1 Minute). */
     private boolean audioOn() {
+        if (callState != CALL_NONE) return callSpeaker;
         return !Prefs.muted(this) || System.currentTimeMillis() < ringAudioUntil;
     }
 
@@ -1681,10 +1857,7 @@ public class MainActivity extends Activity implements MotionService.Listener {
 
     private void updateButtons() {
         boolean muted = !audioOn();
-        if (btnRingSound != null) {
-            btnRingSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
-            tvRingSound.setText(muted ? "Ton aus" : "Ton an");
-        }
+        if (callState != CALL_NONE) updateCallUi();
         btnSound.setImageResource(muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_on);
         btnSound.setActivated(!muted);
         boolean hd = !"sub".equals(Prefs.liveStream(this));
